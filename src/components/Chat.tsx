@@ -131,7 +131,8 @@ export default function Chat() {
       }
     } catch (err) {
       console.error(err);
-      full = full || "Sorry, something went wrong generating a response.";
+      const detail = err instanceof Error ? err.message : String(err);
+      full = full || `Sorry, generation failed: ${detail}`;
     }
 
     await db.chat.add({ role: "assistant", content: full, createdAt: Date.now() });
