@@ -8,6 +8,7 @@ import {
   AVAILABLE_MODELS,
   type ModelId,
   getLastStatsText,
+  isStoragePersisted,
   isWasmSupported,
   loadEngine,
   streamChat,
@@ -62,10 +63,15 @@ export default function Chat() {
         setProgress(`Downloading model… ${pct}% (${mb(loaded)} / ${mb(total)} MB)`);
       });
       const seconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+      const persisted = await isStoragePersisted();
+      const persistNote =
+        persisted === false
+          ? " — storage isn't marked durable yet; install this app to your home screen to stop it being evicted between visits"
+          : "";
       setProgress(
-        sawPartialProgress
+        (sawPartialProgress
           ? `Downloaded and loaded in ${seconds}s`
-          : `Loaded from local cache in ${seconds}s (no re-download)`
+          : `Loaded from local cache in ${seconds}s (no re-download)`) + persistNote
       );
       setStatus("ready");
     } catch (err) {
@@ -143,15 +149,18 @@ export default function Chat() {
   return (
     <div className="flex h-full flex-col">
       {status === "ready" ? (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-foreground-muted sm:px-5">
-          <span className="truncate">{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
-          <button
-            className="shrink-0 rounded-md px-2 py-1 transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
-            onClick={() => setStatus("idle")}
-            disabled={streaming}
-          >
-            Change model
-          </button>
+        <div className="px-3 py-2 text-xs text-foreground-muted sm:px-5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate">{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
+            <button
+              className="shrink-0 rounded-md px-2 py-1 transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
+              onClick={() => setStatus("idle")}
+              disabled={streaming}
+            >
+              Change model
+            </button>
+          </div>
+          {progress && <p className="mt-0.5">{progress}</p>}
         </div>
       ) : (
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-3 py-4 sm:px-5">

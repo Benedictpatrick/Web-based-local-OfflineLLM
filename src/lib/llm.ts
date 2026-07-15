@@ -32,6 +32,17 @@ export function isWasmSupported(): boolean {
   return typeof WebAssembly !== "undefined";
 }
 
+export async function isStoragePersisted(): Promise<boolean | null> {
+  if (typeof navigator === "undefined" || !navigator.storage?.persisted) {
+    return null;
+  }
+  try {
+    return await navigator.storage.persisted();
+  } catch {
+    return null;
+  }
+}
+
 export async function loadEngine(
   modelId: ModelId,
   onProgress?: (progress: { loaded: number; total: number }) => void
@@ -46,6 +57,16 @@ export async function loadEngine(
 
   const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
   if (!model) throw new Error(`Unknown model: ${modelId}`);
+
+  // Without this, the model file is written to browser storage as
+  // "best-effort" — Chrome (especially on phones with limited space) can
+  // silently evict it between sessions, causing a full re-download every
+  // time even though nothing actually failed. This requests a durable grant
+  // instead. Chrome is far more likely to grant it for an installed PWA /
+  // bookmarked site than a plain one-off tab.
+  if (typeof navigator !== "undefined" && navigator.storage?.persist) {
+    navigator.storage.persist().catch(() => {});
+  }
 
   loadingPromise = (async () => {
     if (wllama) {
