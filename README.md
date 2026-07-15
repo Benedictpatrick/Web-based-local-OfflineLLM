@@ -18,3 +18,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Stack
 
 Next.js (App Router) · TypeScript · Tailwind · Dexie (IndexedDB) · wllama
+
+## Deployment
+
+Connected to Vercel — pushes to `main` deploy automatically.
