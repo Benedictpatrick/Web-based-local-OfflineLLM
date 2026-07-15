@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { ChatCompletionMessage } from "@wllama/wllama/esm/index.js";
-import { db } from "@/lib/db";
+import { db, type ChatMessage } from "@/lib/db";
 import {
   AVAILABLE_MODELS,
   type ModelId,
@@ -15,6 +15,42 @@ import {
 } from "@/lib/llm";
 import { topRelevantEntries } from "@/lib/retrieval";
 import ModelPicker from "@/components/ModelPicker";
+
+// Memoized so streaming updates (draftReply changing 60x/sec) don't force
+// React to re-diff every past message bubble on every token — on a phone
+// CPU, re-rendering a long history that often was the actual source of the
+// "choppy" streaming text, not the token itself.
+const MessageHistory = memo(function MessageHistory({
+  messages,
+}: {
+  messages: ChatMessage[];
+}) {
+  return (
+    <>
+      {messages.map((m) =>
+        m.role === "user" ? (
+          <div key={m.id} className="msg-enter flex justify-end">
+            <div className="max-w-[80%] rounded-2xl border border-border bg-bubble-user px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap">
+              {m.content}
+            </div>
+          </div>
+        ) : (
+          <div key={m.id} className="msg-enter flex gap-3">
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="9" r="4.5" fill="currentColor" />
+                <rect x="6.5" y="16" width="11" height="4" rx="2" fill="currentColor" />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1 pt-1 text-[15px] leading-relaxed whitespace-pre-wrap">
+              {m.content}
+            </div>
+          </div>
+        )
+      )}
+    </>
+  );
+});
 
 const SYSTEM_PROMPT =
   "You are a private, on-device assistant running entirely offline — nothing the user says ever leaves this browser. Keep replies short: 1-3 sentences unless the user clearly asks for more detail or a list. Answer directly first, then stop — do not pad, repeat yourself, or restate the question. When journal context is provided, use it naturally to personalize your answer, but don't mention that you were 'given context' unless asked.";
@@ -212,27 +248,7 @@ export default function Chat() {
               {status === "ready" ? "Ask anything to get started." : "Load a model, then start chatting."}
             </div>
           )}
-          {(messages ?? []).map((m) =>
-            m.role === "user" ? (
-              <div key={m.id} className="msg-enter flex justify-end">
-                <div className="max-w-[80%] rounded-2xl border border-border bg-bubble-user px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap">
-                  {m.content}
-                </div>
-              </div>
-            ) : (
-              <div key={m.id} className="msg-enter flex gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="9" r="4.5" fill="currentColor" />
-                    <rect x="6.5" y="16" width="11" height="4" rx="2" fill="currentColor" />
-                  </svg>
-                </div>
-                <div className="min-w-0 flex-1 pt-1 text-[15px] leading-relaxed whitespace-pre-wrap">
-                  {m.content}
-                </div>
-              </div>
-            )
-          )}
+          <MessageHistory messages={messages ?? []} />
           {streaming && (
             <div className="msg-enter flex gap-3">
               <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
