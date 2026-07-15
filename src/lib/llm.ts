@@ -79,15 +79,31 @@ export async function loadEngine(
       { default: "/wllama/wllama.wasm" },
       { allowOffline: true }
     );
-    await instance.loadModelFromHF(
-      { repo: model.repo, file: model.file },
-      {
-        n_ctx: 4096,
-        progressCallback: onProgress
-          ? ({ loaded, total }) => onProgress({ loaded, total })
-          : undefined,
-      }
-    );
+
+    const loadParams = {
+      n_ctx: 4096,
+      progressCallback: onProgress
+        ? ({ loaded, total }: { loaded: number; total: number }) =>
+            onProgress({ loaded, total })
+        : undefined,
+    };
+
+    try {
+      await instance.loadModelFromHF({ repo: model.repo, file: model.file }, loadParams);
+    } catch (err) {
+      // Storage eviction on the device can leave stale cache metadata
+      // behind (the index says a file is cached, but the actual bytes are
+      // gone) — wllama surfaces that as "Model file not found" instead of
+      // just re-downloading. Clear the stale entry and retry fresh rather
+      // than surfacing that as a scary, unrecoverable error.
+      const isStaleCacheError =
+        err instanceof Error && /model file not found/i.test(err.message);
+      if (!isStaleCacheError) throw err;
+
+      await instance.cacheManager.clear().catch(() => {});
+      await instance.loadModelFromHF({ repo: model.repo, file: model.file }, loadParams);
+    }
+
     wllama = instance;
     loadedModelId = modelId;
     loadingPromise = null;
