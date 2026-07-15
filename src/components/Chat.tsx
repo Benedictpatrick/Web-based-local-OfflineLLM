@@ -96,9 +96,13 @@ export default function Chat() {
             .join("\n")}\n\n`
         : "";
 
-    const history = (await db.chat.orderBy("createdAt").toArray()).map(
-      (m): ChatCompletionMessage => ({ role: m.role, content: m.content })
-    );
+    // Sending the full history means prefill cost (and thus lag) grows with
+    // every message, and can eventually overflow the context window. Cap it
+    // to the most recent turns — plenty for coherent replies in a chat app.
+    const MAX_HISTORY_MESSAGES = 12;
+    const history = (await db.chat.orderBy("createdAt").toArray())
+      .slice(-MAX_HISTORY_MESSAGES)
+      .map((m): ChatCompletionMessage => ({ role: m.role, content: m.content }));
 
     const promptMessages: ChatCompletionMessage[] = [
       { role: "system", content: SYSTEM_PROMPT + (contextBlock ? `\n\n${contextBlock}` : "") },

@@ -81,7 +81,12 @@ export async function loadEngine(
     );
 
     const loadParams = {
-      n_ctx: 4096,
+      // Smaller context = smaller KV-cache allocation up front. On a
+      // memory-constrained phone (often a few hundred MB per tab), a
+      // large reserved allocation is a real source of slowdowns and
+      // tab kills, not just a theoretical concern — 2048 is still
+      // plenty for a short chat/journal conversation.
+      n_ctx: 2048,
       progressCallback: onProgress
         ? ({ loaded, total }: { loaded: number; total: number }) =>
             onProgress({ loaded, total })
@@ -133,7 +138,10 @@ export async function* streamChat(
     messages,
     stream: true,
     timings_per_token: true,
-    max_tokens: 220,
+    // Caps worst-case wall-clock wait on slow phone CPUs; the system
+    // prompt already asks for 1-3 sentences, so this is just a safety
+    // ceiling, not the typical reply length.
+    max_tokens: 150,
     // Small models (0.5B-3B) degrade into repetition/rambling without these —
     // temperature alone isn't enough sampling control for low-parameter models.
     temp: 0.7,
