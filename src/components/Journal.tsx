@@ -24,11 +24,11 @@ export default function Journal() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-5">
+    <div className="flex h-full flex-col overflow-y-auto px-3 sm:px-5">
       <div className="mx-auto w-full max-w-2xl py-5">
         <div className="rounded-2xl border border-border bg-surface p-3 shadow-sm">
           <textarea
-            className="w-full resize-none bg-transparent px-1 py-1 text-[15px] outline-none placeholder:text-foreground-muted"
+            className="w-full resize-none bg-transparent px-1 py-1 text-base outline-none placeholder:text-foreground-muted"
             rows={3}
             placeholder="What's on your mind today? This stays on your device and the assistant can recall it later."
             value={draft}

@@ -55,11 +55,21 @@ export default function Chat() {
   async function handleLoadModel() {
     setStatus("loading");
     setErrorText("");
+    const startedAt = performance.now();
+    let sawPartialProgress = false;
     try {
       await loadEngine(modelId, ({ loaded, total }) => {
+        if (loaded < total) sawPartialProgress = true;
         const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
-        setProgress(`Downloading model… ${pct}%`);
+        const mb = (n: number) => (n / (1024 * 1024)).toFixed(0);
+        setProgress(`Downloading model… ${pct}% (${mb(loaded)} / ${mb(total)} MB)`);
       });
+      const seconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+      setProgress(
+        sawPartialProgress
+          ? `Downloaded and loaded in ${seconds}s`
+          : `Loaded from local cache in ${seconds}s (no re-download)`
+      );
       setStatus("ready");
     } catch (err) {
       console.error(err);
@@ -136,10 +146,10 @@ export default function Chat() {
   return (
     <div className="flex h-full flex-col">
       {status === "ready" ? (
-        <div className="flex items-center justify-between px-5 py-2 text-xs text-foreground-muted">
-          <span>{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
+        <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-foreground-muted sm:px-5">
+          <span className="truncate">{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
           <button
-            className="rounded-md px-2 py-1 transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
+            className="shrink-0 rounded-md px-2 py-1 transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
             onClick={() => setStatus("idle")}
             disabled={streaming}
           >
@@ -147,10 +157,10 @@ export default function Chat() {
           </button>
         </div>
       ) : (
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-5 py-4">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-3 py-4 sm:px-5">
           <div className="flex items-center gap-2">
             <select
-              className="flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none"
+              className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none"
               value={modelId}
               disabled={status === "loading"}
               onChange={(e) => setModelId(e.target.value as ModelId)}
@@ -162,7 +172,7 @@ export default function Chat() {
               ))}
             </select>
             <button
-              className="rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity disabled:opacity-50"
+              className="shrink-0 rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity disabled:opacity-50"
               onClick={handleLoadModel}
               disabled={status === "loading"}
             >
@@ -187,7 +197,7 @@ export default function Chat() {
         </div>
       )}
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3 sm:px-5">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 py-6">
           {(messages ?? []).length === 0 && !streaming && (
             <div className="flex flex-1 items-center justify-center py-24 text-sm text-foreground-muted">
@@ -238,11 +248,11 @@ export default function Chat() {
         </div>
       </div>
 
-      <div className="px-5 pb-5 pt-2">
+      <div className="px-3 pb-5 pt-2 sm:px-5">
         <div className="mx-auto w-full max-w-2xl">
           <div className="flex items-center gap-2 rounded-3xl border border-border bg-surface px-2 py-2 shadow-sm">
             <input
-              className="flex-1 bg-transparent px-3 py-1.5 text-[15px] outline-none placeholder:text-foreground-muted"
+              className="min-w-0 flex-1 bg-transparent px-3 py-1.5 text-base outline-none placeholder:text-foreground-muted"
               placeholder={status === "ready" ? "Message…" : "Load the model to start chatting"}
               value={input}
               disabled={status !== "ready" || streaming}

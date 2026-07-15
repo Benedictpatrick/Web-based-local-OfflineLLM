@@ -9,19 +9,19 @@ export default function Home() {
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
-      <header className="flex items-center justify-between px-5 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background">
+      <header className="flex items-center justify-between gap-2 px-3 py-3 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="9" r="4.5" fill="currentColor" />
               <rect x="6.5" y="16" width="11" height="4" rx="2" fill="currentColor" />
             </svg>
           </div>
-          <h1 className="text-sm font-medium">Offline Companion</h1>
+          <h1 className="truncate text-sm font-medium">Offline Companion</h1>
         </div>
-        <nav className="flex gap-0.5 rounded-full bg-surface p-0.5 text-sm">
+        <nav className="flex shrink-0 gap-0.5 rounded-full bg-surface p-0.5 text-sm">
           <button
-            className={`rounded-full px-3.5 py-1.5 transition-colors ${
+            className={`rounded-full px-2.5 py-1.5 transition-colors sm:px-3.5 ${
               tab === "chat"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-foreground-muted hover:text-foreground"
@@ -31,7 +31,7 @@ export default function Home() {
             Chat
           </button>
           <button
-            className={`rounded-full px-3.5 py-1.5 transition-colors ${
+            className={`rounded-full px-2.5 py-1.5 transition-colors sm:px-3.5 ${
               tab === "journal"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-foreground-muted hover:text-foreground"
