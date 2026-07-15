@@ -2,25 +2,66 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --surface: #f7f7f8;
+  --surface-hover: #ececec;
+  --border: #e5e5e5;
+  --foreground: #0d0d0d;
+  --foreground-muted: #6e6e80;
+  --accent: #10a37f;
+  --accent-foreground: #ffffff;
+  --bubble-user: #f4f4f4;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
   --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-bubble-user: var(--bubble-user);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #212121;
+    --surface: #171717;
+    --surface-hover: #2a2a2a;
+    --border: #2f2f2f;
+    --foreground: #ececec;
+    --foreground-muted: #9a9aa5;
+    --accent: #10a37f;
+    --accent-foreground: #ffffff;
+    --bubble-user: #383838;
   }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.msg-enter {
+  animation: fade-in-up 0.2s ease-out;
 }

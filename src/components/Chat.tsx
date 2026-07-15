@@ -136,10 +136,10 @@ export default function Chat() {
   return (
     <div className="flex h-full flex-col">
       {status === "ready" ? (
-        <div className="flex items-center justify-between border-b border-black/10 px-4 py-2 text-xs text-zinc-500 dark:border-white/10">
+        <div className="flex items-center justify-between px-5 py-2 text-xs text-foreground-muted">
           <span>{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
           <button
-            className="underline disabled:opacity-50"
+            className="rounded-md px-2 py-1 transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
             onClick={() => setStatus("idle")}
             disabled={streaming}
           >
@@ -147,10 +147,10 @@ export default function Chat() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-3 border-b border-black/10 p-4 dark:border-white/10">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 px-5 py-4">
           <div className="flex items-center gap-2">
             <select
-              className="rounded border border-black/10 bg-white px-2 py-1 text-sm dark:border-white/10 dark:bg-black"
+              className="flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none"
               value={modelId}
               disabled={status === "loading"}
               onChange={(e) => setModelId(e.target.value as ModelId)}
@@ -162,24 +162,24 @@ export default function Chat() {
               ))}
             </select>
             <button
-              className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
+              className="rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity disabled:opacity-50"
               onClick={handleLoadModel}
               disabled={status === "loading"}
             >
-              {status === "loading" ? "Loading model…" : "Load model"}
+              {status === "loading" ? "Loading…" : "Load model"}
             </button>
           </div>
           {status === "loading" && (
-            <p className="text-xs text-zinc-500">{progress || "Starting…"}</p>
+            <p className="text-xs text-foreground-muted">{progress || "Starting…"}</p>
           )}
           {status === "error" && (
-            <p className="text-xs text-red-600">
+            <p className="text-xs text-red-500">
               Failed to load the model{errorText ? `: ${errorText}` : ""}. Check
               your connection for the first download, then it will work
               offline.
             </p>
           )}
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-foreground-muted">
             Runs entirely on your device&apos;s CPU via WebAssembly — no GPU
             required. First load downloads the model to your browser&apos;s
             cache; after that it works fully offline.
@@ -187,52 +187,91 @@ export default function Chat() {
         </div>
       )}
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4">
-        <div className="mx-auto flex max-w-2xl flex-col gap-3">
-          {(messages ?? []).map((m) => (
-            <div
-              key={m.id}
-              className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
-                m.role === "user"
-                  ? "self-end bg-black text-white dark:bg-white dark:text-black"
-                  : "self-start bg-zinc-100 text-black dark:bg-zinc-800 dark:text-white"
-              }`}
-            >
-              {m.content}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 py-6">
+          {(messages ?? []).length === 0 && !streaming && (
+            <div className="flex flex-1 items-center justify-center py-24 text-sm text-foreground-muted">
+              {status === "ready" ? "Ask anything to get started." : "Load a model, then start chatting."}
             </div>
-          ))}
+          )}
+          {(messages ?? []).map((m) =>
+            m.role === "user" ? (
+              <div key={m.id} className="msg-enter flex justify-end">
+                <div className="max-w-[80%] rounded-2xl border border-border bg-bubble-user px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap">
+                  {m.content}
+                </div>
+              </div>
+            ) : (
+              <div key={m.id} className="msg-enter flex gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="9" r="4.5" fill="currentColor" />
+                    <rect x="6.5" y="16" width="11" height="4" rx="2" fill="currentColor" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1 pt-1 text-[15px] leading-relaxed whitespace-pre-wrap">
+                  {m.content}
+                </div>
+              </div>
+            )
+          )}
           {streaming && (
-            <div className="max-w-[85%] self-start rounded-2xl bg-zinc-100 px-4 py-2 text-sm whitespace-pre-wrap dark:bg-zinc-800">
-              {draftReply || "…"}
+            <div className="msg-enter flex gap-3">
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="9" r="4.5" fill="currentColor" />
+                  <rect x="6.5" y="16" width="11" height="4" rx="2" fill="currentColor" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1 pt-1 text-[15px] leading-relaxed whitespace-pre-wrap">
+                {draftReply || (
+                  <span className="inline-flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted" />
+                  </span>
+                )}
+              </div>
             </div>
           )}
           <div ref={bottomRef} />
         </div>
       </div>
 
-      <div className="border-t border-black/10 p-4 dark:border-white/10">
-        <div className="mx-auto flex max-w-2xl gap-2">
-          <input
-            className="flex-1 rounded-full border border-black/10 bg-white px-4 py-2 text-sm dark:border-white/10 dark:bg-black"
-            placeholder={status === "ready" ? "Ask anything…" : "Load the model to start chatting"}
-            value={input}
-            disabled={status !== "ready" || streaming}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSend();
-            }}
-          />
-          <button
-            className="rounded-full bg-black px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
-            onClick={handleSend}
-            disabled={status !== "ready" || streaming || !input.trim()}
-          >
-            Send
-          </button>
+      <div className="px-5 pb-5 pt-2">
+        <div className="mx-auto w-full max-w-2xl">
+          <div className="flex items-center gap-2 rounded-3xl border border-border bg-surface px-2 py-2 shadow-sm">
+            <input
+              className="flex-1 bg-transparent px-3 py-1.5 text-[15px] outline-none placeholder:text-foreground-muted"
+              placeholder={status === "ready" ? "Message…" : "Load the model to start chatting"}
+              value={input}
+              disabled={status !== "ready" || streaming}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSend();
+              }}
+            />
+            <button
+              aria-label="Send"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity disabled:opacity-30"
+              onClick={handleSend}
+              disabled={status !== "ready" || streaming || !input.trim()}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 19V5M12 5L5 12M12 5L19 12"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+          {lastStats && (
+            <p className="mt-2 text-center text-xs text-foreground-muted">{lastStats}</p>
+          )}
         </div>
-        {lastStats && (
-          <p className="mx-auto mt-2 max-w-2xl text-xs text-zinc-500">{lastStats}</p>
-        )}
       </div>
     </div>
   );

@@ -24,51 +24,55 @@ export default function Journal() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-black/10 p-4 dark:border-white/10">
-        <div className="mx-auto flex max-w-2xl flex-col gap-2">
+    <div className="flex h-full flex-col overflow-y-auto px-5">
+      <div className="mx-auto w-full max-w-2xl py-5">
+        <div className="rounded-2xl border border-border bg-surface p-3 shadow-sm">
           <textarea
-            className="w-full resize-none rounded-lg border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-black"
+            className="w-full resize-none bg-transparent px-1 py-1 text-[15px] outline-none placeholder:text-foreground-muted"
             rows={3}
             placeholder="What's on your mind today? This stays on your device and the assistant can recall it later."
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
           />
-          <button
-            className="self-end rounded-full bg-black px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
-            onClick={handleAdd}
-            disabled={!draft.trim()}
-          >
-            Save entry
-          </button>
+          <div className="flex justify-end">
+            <button
+              className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background transition-opacity disabled:opacity-30"
+              onClick={handleAdd}
+              disabled={!draft.trim()}
+            >
+              Save entry
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="mx-auto flex max-w-2xl flex-col gap-3">
+      <div className="mx-auto w-full max-w-2xl flex-1 pb-6">
+        <div className="flex flex-col gap-3">
           {(entries ?? []).length === 0 && (
-            <p className="text-sm text-zinc-500">
-              No entries yet. Write your first one above — the assistant will use it
-              to give you more personal answers in Chat.
+            <p className="py-12 text-center text-sm text-foreground-muted">
+              No entries yet. Write your first one above — the assistant will use
+              it to give you more personal answers in Chat.
             </p>
           )}
           {(entries ?? []).map((entry) => (
             <div
               key={entry.id}
-              className="rounded-lg border border-black/10 p-3 dark:border-white/10"
+              className="msg-enter group rounded-2xl border border-border p-4 transition-colors hover:bg-surface"
             >
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-xs text-zinc-500">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-xs text-foreground-muted">
                   {new Date(entry.createdAt).toLocaleString()}
                 </span>
                 <button
-                  className="text-xs text-red-600 hover:underline dark:text-red-400"
+                  className="text-xs text-foreground-muted opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
                   onClick={() => handleDelete(entry.id)}
                 >
                   Delete
                 </button>
               </div>
-              <p className="text-sm whitespace-pre-wrap">{entry.text}</p>
+              <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                {entry.text}
+              </p>
             </div>
           ))}
         </div>

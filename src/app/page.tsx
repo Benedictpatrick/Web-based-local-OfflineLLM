@@ -8,21 +8,33 @@ export default function Home() {
   const [tab, setTab] = useState<"chat" | "journal">("chat");
 
   return (
-    <div className="flex h-dvh flex-col bg-white text-black dark:bg-black dark:text-white">
-      <header className="flex items-center justify-between border-b border-black/10 px-4 py-3 dark:border-white/10">
-        <h1 className="text-sm font-semibold">Offline Companion</h1>
-        <nav className="flex gap-1 rounded-full bg-zinc-100 p-1 text-sm dark:bg-zinc-900">
+    <div className="flex h-dvh flex-col bg-background text-foreground">
+      <header className="flex items-center justify-between px-5 py-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="9" r="4.5" fill="currentColor" />
+              <rect x="6.5" y="16" width="11" height="4" rx="2" fill="currentColor" />
+            </svg>
+          </div>
+          <h1 className="text-sm font-medium">Offline Companion</h1>
+        </div>
+        <nav className="flex gap-0.5 rounded-full bg-surface p-0.5 text-sm">
           <button
-            className={`rounded-full px-3 py-1 ${
-              tab === "chat" ? "bg-black text-white dark:bg-white dark:text-black" : ""
+            className={`rounded-full px-3.5 py-1.5 transition-colors ${
+              tab === "chat"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-foreground-muted hover:text-foreground"
             }`}
             onClick={() => setTab("chat")}
           >
             Chat
           </button>
           <button
-            className={`rounded-full px-3 py-1 ${
-              tab === "journal" ? "bg-black text-white dark:bg-white dark:text-black" : ""
+            className={`rounded-full px-3.5 py-1.5 transition-colors ${
+              tab === "journal"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-foreground-muted hover:text-foreground"
             }`}
             onClick={() => setTab("journal")}
           >

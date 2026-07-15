@@ -4,8 +4,8 @@
   "description": "A private AI assistant and journal that runs entirely on your device.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#212121",
+  "theme_color": "#212121",
   "icons": [
     {
       "src": "/icon.svg",
