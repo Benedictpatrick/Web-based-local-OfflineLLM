@@ -17,15 +17,12 @@ export default function AppleIcon() {
         }}
       >
         <svg width="112" height="112" viewBox="0 0 24 24" fill="none">
-          <circle
-            cx="12"
-            cy="12"
-            r="7.5"
+          <path
+            d="M8 6l8 6-8 6"
             stroke="#ffffff"
             strokeWidth="3"
             strokeLinecap="round"
-            strokeDasharray="36.5 10.6"
-            transform="rotate(-50 12 12)"
+            strokeLinejoin="round"
           />
         </svg>
       </div>

@@ -15,7 +15,7 @@ export default function Home() {
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
             <LogoMark className="h-4 w-4" />
           </div>
-          <h1 className="truncate text-sm font-medium">Airgap</h1>
+          <h1 className="truncate text-sm font-medium">Navo</h1>
         </div>
         <nav className="flex shrink-0 gap-0.5 rounded-full bg-surface p-0.5 text-sm">
           <button
