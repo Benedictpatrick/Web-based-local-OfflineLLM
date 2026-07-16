@@ -1,7 +1,7 @@
 {
   "name": "Navo",
   "short_name": "Navo",
-  "description": "A private AI assistant and journal that runs entirely on your device.",
+  "description": "A private AI study assistant and coding notebook that runs entirely on your device.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#212121",

@@ -6,7 +6,7 @@ import ChatHistory from "@/components/ChatHistory";
 import Journal from "@/components/Journal";
 
 export default function Home() {
-  const [tab, setTab] = useState<"chat" | "journal">("chat");
+  const [tab, setTab] = useState<"chat" | "notes">("chat");
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -43,24 +43,24 @@ export default function Home() {
           </button>
           <button
             className={`rounded-full px-2.5 py-1.5 transition-colors sm:px-3.5 ${
-              tab === "journal"
+              tab === "notes"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-foreground-muted hover:text-foreground"
             }`}
-            onClick={() => setTab("journal")}
+            onClick={() => setTab("notes")}
           >
-            Journal
+            Notes
           </button>
         </nav>
       </header>
       <main className="min-h-0 flex-1">
         {/* Both stay mounted so Chat keeps its loaded-model state when you
-            switch to Journal and back — unmounting it would lose that
+            switch to Notes and back — unmounting it would lose that
             component-local status even though the model stays in memory. */}
         <div className={tab === "chat" ? "h-full" : "hidden"}>
           <Chat conversationId={conversationId} onConversationChange={setConversationId} />
         </div>
-        <div className={tab === "journal" ? "h-full" : "hidden"}>
+        <div className={tab === "notes" ? "h-full" : "hidden"}>
           <Journal />
         </div>
       </main>
