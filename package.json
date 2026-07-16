@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sync:katex": "node scripts/sync-katex.mjs",
+    "predev": "npm run sync:katex",
+    "prebuild": "npm run sync:katex",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -13,12 +16,15 @@
     "@wllama/wllama": "^3.5.1",
     "dexie": "^4.4.4",
     "dexie-react-hooks": "^4.4.0",
+    "katex": "^0.17.0",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
-    "remark-gfm": "^4.0.1"
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

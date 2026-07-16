@@ -30,7 +30,7 @@ export default function Journal() {
           <textarea
             className="w-full resize-none bg-transparent px-1 py-1 text-base outline-none placeholder:text-foreground-muted"
             rows={3}
-            placeholder="What's on your mind today? This stays on your device and the assistant can recall it later."
+            placeholder="Save a code snippet, a concept you're still shaky on, or notes from a lecture. This stays on your device, and the assistant pulls it up when it's relevant to a question."
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
           />
@@ -40,7 +40,7 @@ export default function Journal() {
               onClick={handleAdd}
               disabled={!draft.trim()}
             >
-              Save entry
+              Save note
             </button>
           </div>
         </div>
@@ -50,8 +50,9 @@ export default function Journal() {
         <div className="flex flex-col gap-3">
           {(entries ?? []).length === 0 && (
             <p className="py-12 text-center text-sm text-foreground-muted">
-              No entries yet. Write your first one above — the assistant will use
-              it to give you more personal answers in Chat.
+              No notes yet. Save a snippet, a definition, or anything from a
+              lecture above — the assistant will draw on it when you ask a
+              related question in Chat.
             </p>
           )}
           {(entries ?? []).map((entry) => (

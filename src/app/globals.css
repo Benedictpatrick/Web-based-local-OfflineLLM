@@ -65,3 +65,22 @@ body {
 .msg-enter {
   animation: fade-in-up 0.2s ease-out;
 }
+
+/* A display equation is a single unbreakable line, so a long one (a wide
+   matrix, a summation with a big body) would otherwise stretch the message
+   column and force the whole page to scroll sideways on a phone. Let the
+   equation scroll inside its own box instead. overflow-y stays hidden so the
+   x-scroll doesn't also add a pointless vertical scrollbar. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/* KaTeX ships a hardcoded 1.21em, which renders noticeably larger than the
+   15px body text around it. Inherit instead so formulas sit on the same
+   visual line as the prose. */
+.katex {
+  font-size: 1.05em;
+}

@@ -3,8 +3,49 @@
 import { useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+
+// Bridges the gap between the LaTeX small models actually emit and the narrow
+// slice remark-math accepts. Two mismatches, both verified against the parser:
+//
+//   1. Models use \(…\) and \[…\] about as often as the dollar forms, and
+//      remark-math understands only dollars — the rest renders as literal
+//      backslashes.
+//   2. remark-math treats a one-line $$x$$ as *inline* math; display mode
+//      needs the $$ fences on their own lines. Models overwhelmingly write
+//      the one-line form, so without this every display equation comes out
+//      cramped inline instead of centered on its own row.
+//
+// None of it may touch code, where a backslash-paren is the author's literal
+// text (a regex, an escape) rather than a formula. Splitting on a capture
+// group parks code spans at odd indices so they pass through untouched.
+function normalizeMathDelimiters(markdown: string): string {
+  return markdown
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+    .map((segment, i) =>
+      i % 2 === 1
+        ? segment
+        : segment
+            // Blank lines around the fence keep the block out of an adjacent
+            // paragraph, which math-flow can't interrupt.
+            .replace(
+              /\\\[([\s\S]+?)\\\]/g,
+              (_, body) => `\n\n$$\n${body.trim()}\n$$\n\n`
+            )
+            .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body}$`)
+            // Only promote a $$…$$ that owns its whole line, and only at
+            // column 0: indented math is usually inside a list item, where
+            // injecting blank lines would split the list apart.
+            .replace(
+              /^\$\$([^\n]+?)\$\$[ \t]*$/gm,
+              (_, body) => `\n\n$$\n${body.trim()}\n$$\n\n`
+            )
+    )
+    .join("");
+}
 
 function CodeBlock({ language, code }: { language: string; code: string }) {
   const [copied, setCopied] = useState(false);
@@ -88,8 +129,15 @@ const components: Components = {
 export default function MarkdownMessage({ content }: { content: string }) {
   return (
     <div className="max-w-none text-[15px] leading-relaxed [&>*:last-child]:mb-0">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        // throwOnError would turn one malformed formula from a 1B model into a
+        // thrown render — and this renders mid-stream, on every token, over
+        // half-finished LaTeX. Render the bad bit in red and keep going.
+        rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
+        components={components}
+      >
+        {normalizeMathDelimiters(content)}
       </ReactMarkdown>
     </div>
   );
