@@ -56,6 +56,11 @@ const MessageHistory = memo(function MessageHistory({
 const SYSTEM_PROMPT =
   "You are a private, on-device study assistant for a computer science and software engineering student, running entirely offline — nothing the user says ever leaves this browser. Keep replies short: 1-3 sentences unless the user clearly asks for more detail, a list, or code. Answer directly first, then stop — do not pad, repeat yourself, or restate the question. Always respond to the user's most recent message specifically — if it changes topic or asks something unrelated to earlier turns, address the new request directly instead of continuing the previous subject. When writing code, always use a markdown fenced code block with the language name (e.g. ```python), write the complete, correct, working code with no placeholders or omitted parts, and briefly explain it before or after the block. Write all mathematics as LaTeX, never as plain text or unicode symbols: inline maths between single dollar signs (like $O(n \\log n)$) and standalone equations between double dollar signs (like $$T(n) = 2T(n/2) + O(n)$$). Use this for complexity and Big-O, recurrences, summations, logarithms, sets, probability and matrices. When notes context is provided, use it naturally to personalize your answer, but don't mention that you were 'given context' unless asked.";
 
+// Caps the message composer's auto-grow so a long pasted paragraph or code
+// block scrolls inside the box instead of pushing the send button and the
+// rest of the page down indefinitely.
+const MAX_TEXTAREA_HEIGHT = 160;
+
 export default function Chat({
   conversationId,
   onConversationChange,
@@ -77,6 +82,7 @@ export default function Chat({
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [progress, setProgress] = useState<string>("");
   const [progressPct, setProgressPct] = useState<number | null>(null);
+  const [showStatusDetail, setShowStatusDetail] = useState(false);
   const [errorText, setErrorText] = useState<string>("");
   const [changingModel, setChangingModel] = useState(false);
   const [input, setInput] = useState("");
@@ -86,9 +92,11 @@ export default function Chat({
   const [lastStats, setLastStats] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingReplyRef = useRef<string>("");
   const flushScheduledRef = useRef(false);
   const autoLoadStartedRef = useRef(false);
+  const statusDetailTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // "smooth" stacks a new scroll animation on every token during a slow
@@ -115,11 +123,32 @@ export default function Chat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    // Intentionally reads .current at cleanup time, not at effect-run time —
+    // the timeout it clears is scheduled later, by handleLoadModel, so there
+    // is nothing meaningful to capture when this effect itself runs.
+    return () => {
+      if (statusDetailTimeoutRef.current) clearTimeout(statusDetailTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Auto-grow the composer with its content instead of scrolling text
+    // sideways inside a fixed-height box. Re-measuring from "auto" (not just
+    // growing) means it also shrinks back down after a send clears `input`.
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+  }, [input]);
+
   async function handleLoadModel(idToLoad: ModelId = modelId) {
     setStatus("loading");
     setErrorText("");
     setProgress("");
     setProgressPct(null);
+    setShowStatusDetail(false);
+    if (statusDetailTimeoutRef.current) clearTimeout(statusDetailTimeoutRef.current);
     const startedAt = performance.now();
     let sawPartialProgress = false;
     try {
@@ -147,6 +176,12 @@ export default function Chat({
           : `Loaded from local cache in ${seconds}s (no re-download)`) + persistNote
       );
       setStatus("ready");
+      // Shown briefly then auto-collapsed rather than left pinned above the
+      // conversation forever — this line (load time, cache/download source,
+      // the storage-persistence nudge) matters right after loading and is
+      // dead weight on every visit after that.
+      setShowStatusDetail(true);
+      statusDetailTimeoutRef.current = setTimeout(() => setShowStatusDetail(false), 6000);
     } catch (err) {
       console.error(err);
       setErrorText(err instanceof Error ? err.message : String(err));
@@ -313,7 +348,13 @@ export default function Chat({
             Change model
           </button>
         </div>
-        {progress && <p className="mt-0.5">{progress}</p>}
+        <div
+          className={`overflow-hidden transition-[max-height,opacity] duration-500 ease-out ${
+            showStatusDetail ? "mt-0.5 max-h-24 opacity-100" : "max-h-0 opacity-0"
+          }`}
+        >
+          {progress && <p>{progress}</p>}
+        </div>
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3 sm:px-5">
@@ -346,20 +387,29 @@ export default function Chat({
 
       <div className="px-3 pb-5 pt-2 sm:px-5">
         <div className="mx-auto w-full max-w-2xl">
-          <div className="flex items-center gap-2 rounded-3xl border border-border bg-surface px-2 py-2 shadow-sm">
-            <input
-              className="min-w-0 flex-1 bg-transparent px-3 py-1.5 text-base outline-none placeholder:text-foreground-muted"
+          <div className="flex items-end gap-2 rounded-3xl border border-border bg-surface px-2 py-2 shadow-sm">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              className="min-w-0 flex-1 resize-none bg-transparent px-3 py-1.5 text-base leading-relaxed outline-none placeholder:text-foreground-muted"
               placeholder="Message…"
               value={input}
               disabled={streaming}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleSend();
+                // Shift+Enter inserts a newline (default textarea behavior,
+                // left alone); plain Enter sends. isComposing guards against
+                // IME confirmation keystrokes (e.g. Japanese/Chinese input)
+                // being read as "send".
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  handleSend();
+                }
               }}
             />
             <button
               aria-label="Send"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+              className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
               onClick={handleSend}
               disabled={streaming || !input.trim()}
             >
