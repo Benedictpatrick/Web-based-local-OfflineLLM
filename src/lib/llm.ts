@@ -315,7 +315,10 @@ async function* streamWebgpuChat(
     messages: messages as never,
     stream: true,
     stream_options: { include_usage: true },
-    max_tokens: 150,
+    // 150 was fine for short chat replies but silently truncated code
+    // answers mid-function — a cut-off function is worse than a slightly
+    // longer wait, so give code room to actually finish.
+    max_tokens: 768,
     temperature: 0.7,
     top_p: 0.9,
   });
@@ -341,10 +344,11 @@ async function* streamWasmChat(
     messages,
     stream: true,
     timings_per_token: true,
-    // Caps worst-case wall-clock wait on slow phone CPUs; the system
-    // prompt already asks for 1-3 sentences, so this is just a safety
-    // ceiling, not the typical reply length.
-    max_tokens: 150,
+    // 150 silently truncated code answers mid-function. This path is the
+    // slower CPU fallback, so keep the ceiling lower than the GPU path's
+    // (worst-case wait matters more here), but still enough room to
+    // actually finish a typical code snippet instead of cutting it off.
+    max_tokens: 512,
     // Small models (0.5B-3B) degrade into repetition/rambling without these —
     // temperature alone isn't enough sampling control for low-parameter models.
     temp: 0.7,

@@ -15,6 +15,7 @@ import {
 } from "@/lib/llm";
 import { topRelevantEntries } from "@/lib/retrieval";
 import ModelPicker from "@/components/ModelPicker";
+import MarkdownMessage from "@/components/MarkdownMessage";
 
 // Memoized so streaming updates (draftReply changing 60x/sec) don't force
 // React to re-diff every past message bubble on every token — on a phone
@@ -37,8 +38,8 @@ const MessageHistory = memo(function MessageHistory({
         ) : (
           <div key={m.id} className="msg-enter flex gap-3">
             <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
-            <div className="min-w-0 flex-1 pt-1 text-[15px] leading-relaxed whitespace-pre-wrap">
-              {m.content}
+            <div className="min-w-0 flex-1 pt-1">
+              <MarkdownMessage content={m.content} />
             </div>
           </div>
         )
@@ -48,7 +49,7 @@ const MessageHistory = memo(function MessageHistory({
 });
 
 const SYSTEM_PROMPT =
-  "You are a private, on-device assistant running entirely offline — nothing the user says ever leaves this browser. Keep replies short: 1-3 sentences unless the user clearly asks for more detail or a list. Answer directly first, then stop — do not pad, repeat yourself, or restate the question. Always respond to the user's most recent message specifically — if it changes topic or asks something unrelated to earlier turns, address the new request directly instead of continuing the previous subject. When journal context is provided, use it naturally to personalize your answer, but don't mention that you were 'given context' unless asked.";
+  "You are a private, on-device assistant running entirely offline — nothing the user says ever leaves this browser. Keep replies short: 1-3 sentences unless the user clearly asks for more detail, a list, or code. Answer directly first, then stop — do not pad, repeat yourself, or restate the question. Always respond to the user's most recent message specifically — if it changes topic or asks something unrelated to earlier turns, address the new request directly instead of continuing the previous subject. When writing code, always use a markdown fenced code block with the language name (e.g. ```python), write the complete, correct, working code with no placeholders or omitted parts, and briefly explain it before or after the block. When journal context is provided, use it naturally to personalize your answer, but don't mention that you were 'given context' unless asked.";
 
 export default function Chat({
   conversationId,
@@ -302,8 +303,10 @@ export default function Chat({
           {streaming && (
             <div className="msg-enter flex gap-3">
               <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
-              <div className="min-w-0 flex-1 pt-1 text-[15px] leading-relaxed whitespace-pre-wrap">
-                {draftReply || (
+              <div className="min-w-0 flex-1 pt-1">
+                {draftReply ? (
+                  <MarkdownMessage content={draftReply} />
+                ) : (
                   <span className="inline-flex gap-1">
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.3s]" />
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.15s]" />
