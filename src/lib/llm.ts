@@ -1,5 +1,7 @@
-import { Wllama, type ChatCompletionMessage } from "@wllama/wllama/esm/index.js";
+import { Wllama, CacheManager, type ChatCompletionMessage } from "@wllama/wllama/esm/index.js";
 import type { MLCEngine } from "@mlc-ai/web-llm";
+
+const HF_BASE = "https://huggingface.co";
 
 export const AVAILABLE_MODELS = [
   {
@@ -230,6 +232,57 @@ export function getLoadedModelId(): ModelId | null {
 
 export function getEngineKind(): "webgpu" | "wasm" | null {
   return engineKind;
+}
+
+// Both engines cache to browser storage independently (wllama to OPFS via
+// CacheManager, web-llm to the Cache API), and which one a given device
+// used depends on WebGPU availability at load time — which could differ
+// between visits. Check/delete both so "delete this model" actually frees
+// the space regardless of which engine downloaded it.
+export async function isModelCached(modelId: ModelId): Promise<boolean> {
+  const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
+  if (!model) return false;
+
+  const wllamaCached = await new CacheManager()
+    .getSize(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
+    .then((size) => size > 0)
+    .catch(() => false);
+  if (wllamaCached) return true;
+
+  try {
+    const webllm = await import("@mlc-ai/web-llm");
+    return await webllm.hasModelInCache(model.mlcId);
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteModelCache(modelId: ModelId): Promise<void> {
+  const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
+  if (!model) return;
+
+  if (loadedModelId === modelId) {
+    if (wllama) {
+      await wllama.exit().catch(() => {});
+      wllama = null;
+    }
+    if (webllmEngine) {
+      await webllmEngine.unload().catch(() => {});
+      webllmEngine = null;
+    }
+    loadedModelId = null;
+  }
+
+  await new CacheManager()
+    .delete(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
+    .catch(() => {});
+
+  try {
+    const webllm = await import("@mlc-ai/web-llm");
+    await webllm.deleteModelAllInfoInCache(model.mlcId);
+  } catch {
+    // Not cached via web-llm, or web-llm unavailable — nothing to do.
+  }
 }
 
 export function getLastStatsText(): string | null {

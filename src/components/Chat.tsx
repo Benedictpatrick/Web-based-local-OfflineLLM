@@ -226,6 +226,13 @@ export default function Chat() {
               value={modelId}
               onChange={setModelId}
               disabled={status === "loading"}
+              onModelDeleted={(id) => {
+                // The picker is only visible once status has left "ready"
+                // (via "Change model"), so there's no ready-badge to clear
+                // here — just make sure a stale "loaded" progress message
+                // isn't left showing for the model that was just deleted.
+                if (id === modelId) setProgress("");
+              }}
             />
             <button
               className="shrink-0 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
