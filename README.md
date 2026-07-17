@@ -1,39 +1,23 @@
 <div align="center">
+  <img src="public/icon.svg" alt="" width="64" height="64">
 
 # Navo
 
-**A private AI study assistant that runs entirely in your browser — no server, no API key, no signup.**
+A private AI study assistant that runs entirely in your browser — no server, no API key, no signup.
 
 [![License: MIT](https://img.shields.io/github/license/Benedictpatrick/Web-based-local-OfflineLLM)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/Benedictpatrick/Web-based-local-OfflineLLM?style=social)](https://github.com/Benedictpatrick/Web-based-local-OfflineLLM/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/Benedictpatrick/Web-based-local-OfflineLLM)](https://github.com/Benedictpatrick/Web-based-local-OfflineLLM/commits/main)
-[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Benedictpatrick/Web-based-local-OfflineLLM)
 
 <!-- TODO: swap in the live Vercel URL once Deployment Protection is disabled for Production -->
-<!-- **[Try it now →](<live-url>)** — no signup, nothing installed, runs in your browser. -->
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Benedictpatrick/Web-based-local-OfflineLLM)
+<!-- **[Try it now →](<live-url>)** -->
 
 ![Navo chat rendering a LaTeX equation](public/screenshot-chat.png)
 
 </div>
 
-The model, the chat, and your notes all live on your device. There's no backend — open the tab, the model downloads once and caches, and after that it works on a plane with no wifi.
+The model, the chat, and your notes all live on your device. There's no backend — open the tab, the model downloads once and caches, and after that it works with no internet at all.
 
-## Why
-
-Every "AI study assistant" you've tried is a wrapper around someone else's API: your questions and your notes go to a server you don't control, and it stops working the moment you lose signal or hit a rate limit. Navo doesn't have a server to send anything to.
-
-|                         | Navo | ChatGPT / Claude (web) | Ollama / LM Studio |
-| ----------------------- | :--: | :---------------------: | :-----------------: |
-| Runs in the browser, no install | ✅ | ✅ | ❌ (native app) |
-| Works fully offline after first load | ✅ | ❌ | ✅ |
-| Your notes/chats leave the device | Never | Yes | Never |
-| Needs an API key or account | No | Yes | No |
-| Model quality | Small (1B–3B) | Frontier | Whatever you download |
-
-That last row is the honest trade-off: Navo runs small models (Llama 3.2 1B/3B, Gemma 2 2B) light enough to download and run in a tab. They're fast and good enough for definitions, complexity analysis, and "what does this error mean" — they are not a frontier model, and won't out-reason ChatGPT on a hard problem.
+Runs Llama 3.2 (1B/3B) or Gemma 2 (2B) fully client-side, via WebGPU where available and WebAssembly otherwise. Small models, so don't expect frontier-level reasoning — good for definitions, complexity analysis, and "what does this error mean," not for anything you can't afford to double-check.
 
 ## Features
 
