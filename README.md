@@ -9,7 +9,7 @@ A private AI assistant that runs entirely in your browser. No server, no API key
 
 **[Try it now →](https://offline-companion-benedictpatrickjohn-9567s-projects.vercel.app)**
 
-![Navo chat rendering a LaTeX equation](public/screenshot-chat.png)
+![Navo generating a Python function, entirely in-browser](public/navo-demo.gif)
 
 </div>
 
