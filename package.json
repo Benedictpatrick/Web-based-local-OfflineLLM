@@ -2,6 +2,7 @@
   "name": "navo",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "sync:katex": "node scripts/sync-katex.mjs",
     "predev": "npm run sync:katex",
