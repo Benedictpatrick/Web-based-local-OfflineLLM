@@ -7,7 +7,9 @@ import { db, type ChatMessage } from "@/lib/db";
 import {
   AVAILABLE_MODELS,
   type ModelId,
+  abortGeneration,
   getLastStatsText,
+  isAbortError,
   isStoragePersisted,
   isWasmSupported,
   loadEngine,
@@ -189,34 +191,12 @@ export default function Chat({
     }
   }
 
-  async function handleSend() {
-    const text = input.trim();
-    if (!text || streaming || status !== "ready") return;
-
-    setInput("");
-
-    let activeConversationId = conversationId;
-    if (!activeConversationId) {
-      // First message of a fresh chat — create its conversation now (not
-      // eagerly on "New chat") so switching to a blank chat and back out
-      // without typing anything doesn't leave clutter in the history list.
-      const now = Date.now();
-      activeConversationId = await db.conversations.add({
-        title: text.slice(0, 60),
-        createdAt: now,
-        updatedAt: now,
-      });
-      onConversationChange(activeConversationId);
-    }
-
-    await db.chat.add({
-      conversationId: activeConversationId,
-      role: "user",
-      content: text,
-      createdAt: Date.now(),
-    });
-
-    const relevant = await topRelevantEntries(text, journalEntries ?? [], 3);
+  // Shared by both a fresh send and a regenerate — the only difference
+  // between them is what precedes this call (a newly-saved user message vs.
+  // a deleted-and-about-to-be-replaced assistant one), not how the reply
+  // itself gets built and streamed.
+  async function generateReply(activeConversationId: number, userText: string) {
+    const relevant = await topRelevantEntries(userText, journalEntries ?? [], 3);
     const contextBlock =
       relevant.length > 0
         ? `Relevant notes the user saved earlier:\n${relevant
@@ -267,21 +247,74 @@ export default function Chat({
         scheduleFlush();
       }
     } catch (err) {
-      console.error(err);
-      const detail = err instanceof Error ? err.message : String(err);
-      full = full || `Sorry, generation failed: ${detail}`;
+      if (isAbortError(err)) {
+        // User hit Stop — keep whatever streamed so far, not an error.
+      } else {
+        console.error(err);
+        const detail = err instanceof Error ? err.message : String(err);
+        full = full || `Sorry, generation failed: ${detail}`;
+      }
+    }
+
+    // Stopped before any tokens came back — nothing worth saving.
+    if (full.trim()) {
+      await db.chat.add({
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: full,
+        createdAt: Date.now(),
+      });
+      await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
+    }
+    setDraftReply("");
+    setStreaming(false);
+    setLastStats(getLastStatsText());
+  }
+
+  async function handleSend() {
+    const text = input.trim();
+    if (!text || streaming || status !== "ready") return;
+
+    setInput("");
+
+    let activeConversationId = conversationId;
+    if (!activeConversationId) {
+      // First message of a fresh chat — create its conversation now (not
+      // eagerly on "New chat") so switching to a blank chat and back out
+      // without typing anything doesn't leave clutter in the history list.
+      const now = Date.now();
+      activeConversationId = await db.conversations.add({
+        title: text.slice(0, 60),
+        createdAt: now,
+        updatedAt: now,
+      });
+      onConversationChange(activeConversationId);
     }
 
     await db.chat.add({
       conversationId: activeConversationId,
-      role: "assistant",
-      content: full,
+      role: "user",
+      content: text,
       createdAt: Date.now(),
     });
-    await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
-    setDraftReply("");
-    setStreaming(false);
-    setLastStats(getLastStatsText());
+
+    await generateReply(activeConversationId, text);
+  }
+
+  async function handleRegenerate() {
+    if (!conversationId || streaming || status !== "ready") return;
+    const all = messages ?? [];
+    const last = all[all.length - 1];
+    if (!last || last.role !== "assistant") return;
+    const lastUser = [...all].reverse().find((m) => m.role === "user");
+    if (!lastUser) return;
+
+    await db.chat.delete(last.id);
+    await generateReply(conversationId, lastUser.content);
+  }
+
+  function handleStop() {
+    abortGeneration();
   }
 
   if (!wasmSupported) {
@@ -365,6 +398,27 @@ export default function Chat({
             </div>
           )}
           <MessageHistory messages={messages ?? []} />
+          {!streaming &&
+            (messages ?? []).length > 0 &&
+            (messages ?? [])[(messages ?? []).length - 1].role === "assistant" && (
+              <div className="-mt-3 flex pl-5">
+                <button
+                  className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-foreground-muted transition-colors hover:bg-surface hover:text-foreground"
+                  onClick={handleRegenerate}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M3 12a9 9 0 0 1 15.3-6.4M21 12a9 9 0 0 1-15.3 6.4M3 5v6h6M21 19v-6h-6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Regenerate
+                </button>
+              </div>
+            )}
           {streaming && (
             <div className="msg-enter flex gap-3">
               <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
@@ -408,20 +462,26 @@ export default function Chat({
               }}
             />
             <button
-              aria-label="Send"
+              aria-label={streaming ? "Stop" : "Send"}
               className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
-              onClick={handleSend}
-              disabled={streaming || !input.trim()}
+              onClick={streaming ? handleStop : handleSend}
+              disabled={!streaming && !input.trim()}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 19V5M12 5L5 12M12 5L19 12"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              {streaming ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="5" y="5" width="14" height="14" rx="2" />
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 19V5M12 5L5 12M12 5L19 12"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
             </button>
           </div>
           {lastStats && (

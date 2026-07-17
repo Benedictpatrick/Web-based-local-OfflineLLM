@@ -1,4 +1,9 @@
-import { Wllama, CacheManager, type ChatCompletionMessage } from "@wllama/wllama/esm/index.js";
+import {
+  Wllama,
+  CacheManager,
+  WllamaAbortError,
+  type ChatCompletionMessage,
+} from "@wllama/wllama/esm/index.js";
 import type { MLCEngine } from "@mlc-ai/web-llm";
 
 const HF_BASE = "https://huggingface.co";
@@ -43,6 +48,11 @@ let lastWebgpuTokPerSec: number | null = null;
 let loadedModelId: ModelId | null = null;
 let engineKind: "webgpu" | "wasm" | null = null;
 let webGpuAvailablePromise: Promise<boolean> | null = null;
+
+// wllama takes an AbortSignal per-request rather than exposing an
+// interrupt() method like web-llm does, so we track the controller for
+// whichever generation is currently in flight on the wasm path.
+let wasmAbortController: AbortController | null = null;
 
 export function isWasmSupported(): boolean {
   return typeof WebAssembly !== "undefined";
@@ -304,6 +314,24 @@ export async function* streamChat(
   yield* streamWasmChat(messages);
 }
 
+// web-llm exposes an interrupt() call that lets its own generation loop
+// wind down cleanly (the async generator just stops yielding); wllama has
+// no equivalent, so the wasm path is stopped by aborting the AbortSignal
+// passed into its own request instead.
+export function abortGeneration(): void {
+  if (engineKind === "webgpu") {
+    webllmEngine?.interruptGenerate();
+    return;
+  }
+  wasmAbortController?.abort();
+}
+
+// Aborting is a normal user action, not a failure — callers should show
+// whatever text streamed so far rather than an error for this case.
+export function isAbortError(err: unknown): boolean {
+  return err instanceof WllamaAbortError || (err instanceof Error && err.name === "AbortError");
+}
+
 async function* streamWebgpuChat(
   messages: ChatCompletionMessage[]
 ): AsyncGenerator<string> {
@@ -340,10 +368,13 @@ async function* streamWasmChat(
     throw new Error("Engine not loaded yet");
   }
 
+  wasmAbortController = new AbortController();
+
   const result = await wllama.createChatCompletion({
     messages,
     stream: true,
     timings_per_token: true,
+    abortSignal: wasmAbortController.signal,
     // 150 silently truncated code answers mid-function. This path is the
     // slower CPU fallback, so keep the ceiling lower than the GPU path's
     // (worst-case wait matters more here), but still enough room to
