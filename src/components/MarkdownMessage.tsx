@@ -53,11 +53,24 @@ function normalizeMathDelimiters(markdown: string): string {
 // mislabeled as safe. Python covers the common case for this app anyway.
 const RUNNABLE_LANGUAGES = new Set(["python", "py"]);
 
-function CodeBlock({ language, code }: { language: string; code: string }) {
+// The system prompt asks the model to tag fences with a language, but a
+// 1B/3B model doesn't reliably do it — the block comes through as untagged
+// "text" as often as not. Guess Python from content in that case so Run and
+// syntax highlighting still work instead of silently not offering either.
+const PYTHON_SIGNATURE =
+  /(^|\n)\s*(def |class |import |from \S+ import |print\(|if __name__ == ['"]__main__['"])/;
+
+function guessLanguage(language: string, code: string): string {
+  if (language) return language;
+  return PYTHON_SIGNATURE.test(code) ? "python" : language;
+}
+
+function CodeBlock({ language: rawLanguage, code }: { language: string; code: string }) {
   const [copied, setCopied] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ output: string; ok: boolean } | null>(null);
 
+  const language = guessLanguage(rawLanguage, code);
   const runnable = RUNNABLE_LANGUAGES.has(language.toLowerCase());
 
   async function handleRun() {
