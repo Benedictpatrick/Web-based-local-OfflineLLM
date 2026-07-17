@@ -349,6 +349,14 @@ async function* streamWebgpuChat(
     max_tokens: 768,
     temperature: 0.7,
     top_p: 0.9,
+    // Same fix as the wasm path's penalty_repeat below: small models degrade
+    // into repeating/contradicting themselves (e.g. describing a left child
+    // and right child identically) without a repetition penalty. web-llm's
+    // OpenAI-shaped API calls this repetition_penalty rather than
+    // penalty_repeat, but it's the same lever — was missing here entirely,
+    // which is why WebGPU (the path most users with a real GPU hit) was the
+    // one actually showing the degraded output.
+    repetition_penalty: 1.15,
   });
 
   for await (const chunk of result) {
