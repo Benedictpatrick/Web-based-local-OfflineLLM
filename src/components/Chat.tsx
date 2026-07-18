@@ -30,10 +30,46 @@ import ModelPicker from "@/components/ModelPicker";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import LoadingScreen from "@/components/LoadingScreen";
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-foreground-muted transition-colors hover:bg-surface hover:text-foreground"
+      onClick={() => {
+        navigator.clipboard.writeText(text).catch(() => {});
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? (
+        "Copied"
+      ) : (
+        <>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <rect x="9" y="9" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+            <path
+              d="M5 15V5a2 2 0 0 1 2-2h10"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+          Copy
+        </>
+      )}
+    </button>
+  );
+}
+
 const MessageHistory = memo(function MessageHistory({
   messages,
+  regenerateTargetId,
+  onRegenerate,
 }: {
   messages: ChatMessage[];
+  regenerateTargetId: number | null;
+  onRegenerate: () => void;
 }) {
   return (
     <>
@@ -45,10 +81,32 @@ const MessageHistory = memo(function MessageHistory({
             </div>
           </div>
         ) : (
-          <div key={m.id} className="msg-enter flex gap-3">
-            <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
-            <div className="min-w-0 flex-1 pt-1">
-              <MarkdownMessage content={m.content} />
+          <div key={m.id} className="msg-enter flex flex-col gap-0.5">
+            <div className="flex gap-3">
+              <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
+              <div className="min-w-0 flex-1 pt-1">
+                <MarkdownMessage content={m.content} />
+              </div>
+            </div>
+            <div className="flex items-center pl-5">
+              <CopyButton text={m.content} />
+              {regenerateTargetId === m.id && (
+                <button
+                  className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-foreground-muted transition-colors hover:bg-surface hover:text-foreground"
+                  onClick={onRegenerate}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M3 12a9 9 0 0 1 15.3-6.4M21 12a9 9 0 0 1-15.3 6.4M3 5v6h6M21 19v-6h-6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Regenerate
+                </button>
+              )}
             </div>
           </div>
         )
@@ -78,6 +136,13 @@ const AGENT_INSTRUCTIONS =
 const MAX_AGENT_STEPS = 2;
 
 const MAX_TEXTAREA_HEIGHT = 160;
+
+const EXAMPLE_PROMPTS = [
+  "Explain recursion with a simple example",
+  "Quiz me on binary search trees",
+  "Debug this code",
+  "Summarize my notes on OS scheduling",
+];
 
 const STUCK_GENERATION_TIMEOUT_MS = 45_000;
 const MAX_STUCK_RETRIES = 1;
@@ -114,6 +179,7 @@ export default function Chat({
   const [lastStats, setLastStats] = useState<GenerationStats | null>(null);
   const [storagePersisted, setStoragePersisted] = useState<boolean | null>(null);
   const [showStats, setShowStats] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; chunks: TextChunk[] } | null>(
     null
   );
@@ -142,6 +208,7 @@ export default function Chat({
       container.scrollHeight - container.scrollTop - container.clientHeight;
     if (distanceFromBottom < 200) {
       bottomRef.current?.scrollIntoView({ behavior: "auto" });
+      setShowScrollButton(false);
     }
   }, [messages, draftReply]);
 
@@ -545,8 +612,22 @@ export default function Chat({
   if (changingModel) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-foreground-muted">
-          {hasLoadedOnce ? "Choose a model to load" : "Choose a model to get started"}
+        {!hasLoadedOnce && (
+          <>
+            <div
+              aria-hidden="true"
+              className="mb-1 text-3xl font-bold tracking-tight text-foreground"
+            >
+              Navo
+            </div>
+            <p className="max-w-xs text-sm text-foreground-muted">
+              A private study assistant that runs entirely on this device — nothing you type
+              ever leaves your browser, and it keeps working offline.
+            </p>
+          </>
+        )}
+        <p className="mt-2 text-sm text-foreground-muted">
+          {hasLoadedOnce ? "Choose a model to load" : "Pick a model to get started"}
         </p>
         {!hasLoadedOnce && (
           <p className="max-w-xs text-xs text-foreground-muted">
@@ -660,35 +741,48 @@ export default function Chat({
           })()}
       </div>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3 sm:px-5">
+      <div className="relative min-h-0 flex-1">
+      <div
+        ref={scrollContainerRef}
+        className="h-full overflow-y-auto px-3 sm:px-5"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+          setShowScrollButton(distanceFromBottom > 300);
+        }}
+      >
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 py-6">
           {(messages ?? []).length === 0 && !streaming && (
-            <div className="flex flex-1 items-center justify-center py-24 text-sm text-foreground-muted">
-              Ask anything to get started.
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
+              <p className="text-sm text-foreground-muted">Ask anything to get started.</p>
+              <div className="flex flex-wrap justify-center gap-2 px-2">
+                {EXAMPLE_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    className="rounded-full border border-border px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:bg-surface hover:text-foreground"
+                    onClick={() => {
+                      setInput(prompt);
+                      textareaRef.current?.focus();
+                    }}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
-          <MessageHistory messages={messages ?? []} />
-          {!streaming &&
-            (messages ?? []).length > 0 &&
-            (messages ?? [])[(messages ?? []).length - 1].role === "assistant" && (
-              <div className="-mt-3 flex pl-5">
-                <button
-                  className="flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-foreground-muted transition-colors hover:bg-surface hover:text-foreground"
-                  onClick={handleRegenerate}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M3 12a9 9 0 0 1 15.3-6.4M21 12a9 9 0 0 1-15.3 6.4M3 5v6h6M21 19v-6h-6"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  Regenerate
-                </button>
-              </div>
-            )}
+          <MessageHistory
+            messages={messages ?? []}
+            regenerateTargetId={
+              !streaming &&
+              (messages ?? []).length > 0 &&
+              (messages ?? [])[(messages ?? []).length - 1].role === "assistant"
+                ? (messages ?? [])[(messages ?? []).length - 1].id
+                : null
+            }
+            onRegenerate={handleRegenerate}
+          />
           {streaming && (
             <div className="msg-enter flex gap-3">
               <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
@@ -716,8 +810,33 @@ export default function Chat({
           <div ref={bottomRef} />
         </div>
       </div>
+      {showScrollButton && (
+        <button
+          type="button"
+          aria-label="Scroll to latest message"
+          className="absolute bottom-3 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-background text-foreground-muted shadow-md transition-colors hover:text-foreground"
+          onClick={() => {
+            bottomRef.current?.scrollIntoView({ behavior: "auto" });
+            setShowScrollButton(false);
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 5v14M12 19l-6-6M12 19l6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      )}
+      </div>
 
-      <div className="px-3 pb-5 pt-2 sm:px-5">
+      <div
+        className="px-3 pt-2 sm:px-5"
+        style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+      >
         <div className="mx-auto w-full max-w-2xl">
           {(micState !== "idle" || micError) && (
             <div className="mb-2 flex items-center gap-2 text-xs">
@@ -780,7 +899,7 @@ export default function Chat({
             />
             <button
               aria-label="Attach a file"
-              className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background hover:text-foreground disabled:opacity-30"
+              className="mb-0.5 flex h-10 w-10 shrink-0 sm:h-9 sm:w-9 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background hover:text-foreground disabled:opacity-30"
               onClick={() => fileInputRef.current?.click()}
               disabled={streaming || attachingFile}
             >
@@ -799,7 +918,7 @@ export default function Chat({
               aria-pressed={agentMode}
               aria-label="Toggle auto-run code"
               title="Let the assistant run Python automatically to compute exact answers"
-              className={`mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 ${
+              className={`mb-0.5 flex h-10 w-10 shrink-0 sm:h-9 sm:w-9 items-center justify-center rounded-full transition-colors disabled:opacity-30 ${
                 agentMode
                   ? "bg-accent text-accent-foreground"
                   : "text-foreground-muted hover:bg-background hover:text-foreground"
@@ -821,7 +940,7 @@ export default function Chat({
               type="button"
               aria-label={micState === "recording" ? "Stop recording" : "Record a voice message"}
               title="Speak instead of typing — transcribed on-device, audio never leaves your browser. First use downloads a ~150MB speech model."
-              className={`mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 ${
+              className={`mb-0.5 flex h-10 w-10 shrink-0 sm:h-9 sm:w-9 items-center justify-center rounded-full transition-colors disabled:opacity-30 ${
                 micState === "recording"
                   ? "bg-red-500 text-white"
                   : "text-foreground-muted hover:bg-background hover:text-foreground"
@@ -863,7 +982,7 @@ export default function Chat({
             />
             <button
               aria-label={streaming ? "Stop" : "Send"}
-              className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+              className="mb-0.5 flex h-10 w-10 shrink-0 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
               onClick={streaming ? handleStop : handleSend}
               disabled={!streaming && !input.trim()}
             >
