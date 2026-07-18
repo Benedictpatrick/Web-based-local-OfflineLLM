@@ -35,14 +35,22 @@ export const AVAILABLE_MODELS = [
 export type ModelId = (typeof AVAILABLE_MODELS)[number]["id"];
 export type ProgressInfo = { loaded: number; total: number; text?: string };
 
+export type GenerationStats = {
+  engine: "webgpu" | "wasm";
+  tokens: number;
+  seconds: number;
+  tokensPerSec: number;
+};
+
 let wllama: Wllama | null = null;
 let wllamaLoadingPromise: Promise<Wllama> | null = null;
-let lastWasmTimings: { predicted_per_second?: number } | null = null;
 
 let webllmEngine: MLCEngine | null = null;
 let webllmLoadingPromise: Promise<MLCEngine> | null = null;
 let webllmMlcId: string | null = null;
-let lastWebgpuTokPerSec: number | null = null;
+
+let lastGenerationStats: GenerationStats | null = null;
+let loadedNCtx: number | null = null;
 
 let loadedModelId: ModelId | null = null;
 let engineKind: "webgpu" | "wasm" | null = null;
@@ -178,9 +186,10 @@ async function loadWasmEngine(
     );
 
     const isMobile = isMobileDevice();
+    const nCtx = isMobile ? 1024 : 2048;
 
     const loadParams = {
-      n_ctx: isMobile ? 1024 : 2048,
+      n_ctx: nCtx,
       n_batch: isMobile ? 128 : undefined,
       n_threads: isMobile ? 1 : undefined,
       progressCallback: onProgress
@@ -202,6 +211,7 @@ async function loadWasmEngine(
       }
 
       wllama = instance;
+      loadedNCtx = nCtx;
       return instance;
     } finally {
       wllamaLoadingPromise = null;
@@ -263,13 +273,21 @@ export async function deleteModelCache(modelId: ModelId): Promise<void> {
   } catch {}
 }
 
-export function getLastStatsText(): string | null {
-  if (engineKind === "webgpu") {
-    if (!lastWebgpuTokPerSec) return null;
-    return `${lastWebgpuTokPerSec.toFixed(1)} tokens/sec (GPU)`;
-  }
-  if (!lastWasmTimings?.predicted_per_second) return null;
-  return `${lastWasmTimings.predicted_per_second.toFixed(1)} tokens/sec`;
+export function getLastGenerationStats(): GenerationStats | null {
+  return lastGenerationStats;
+}
+
+/** Context window size in tokens for the loaded WASM model, or null (WebGPU uses the model's built-in default). */
+export function getLoadedContextSize(): number | null {
+  return engineKind === "wasm" ? loadedNCtx : null;
+}
+
+export function getDeviceInfo(): { cores: number | null; memoryGb: number | null } {
+  if (typeof navigator === "undefined") return { cores: null, memoryGb: null };
+  return {
+    cores: navigator.hardwareConcurrency ?? null,
+    memoryGb: (navigator as unknown as { deviceMemory?: number }).deviceMemory ?? null,
+  };
 }
 
 export type ChatOptions = { temperature?: number };
@@ -341,9 +359,19 @@ async function* streamWebgpuChat(
   }
 
   for await (const chunk of result) {
-    const usage = chunk.usage as { extra?: { decode_tokens_per_s?: number } } | undefined;
+    const usage = chunk.usage as
+      | {
+          completion_tokens?: number;
+          extra?: { decode_tokens_per_s?: number; e2e_latency_s?: number };
+        }
+      | undefined;
     if (usage?.extra?.decode_tokens_per_s) {
-      lastWebgpuTokPerSec = usage.extra.decode_tokens_per_s;
+      lastGenerationStats = {
+        engine: "webgpu",
+        tokens: usage.completion_tokens ?? 0,
+        seconds: usage.extra.e2e_latency_s ?? 0,
+        tokensPerSec: usage.extra.decode_tokens_per_s,
+      };
     }
     const delta = chunk.choices[0]?.delta?.content;
     if (delta) yield delta;
@@ -374,7 +402,14 @@ async function* streamWasmChat(
   });
 
   for await (const chunk of result) {
-    if (chunk.timings) lastWasmTimings = chunk.timings;
+    if (chunk.timings?.predicted_per_second) {
+      lastGenerationStats = {
+        engine: "wasm",
+        tokens: chunk.timings.predicted_n,
+        seconds: chunk.timings.predicted_ms / 1000,
+        tokensPerSec: chunk.timings.predicted_per_second,
+      };
+    }
     const delta = chunk.choices[0]?.delta?.content;
     if (delta) yield delta;
   }

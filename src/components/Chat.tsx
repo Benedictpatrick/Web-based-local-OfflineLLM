@@ -6,10 +6,14 @@ import type { ChatCompletionMessage } from "@wllama/wllama/esm/index.js";
 import { db, type ChatMessage } from "@/lib/db";
 import {
   AVAILABLE_MODELS,
+  type GenerationStats,
   type ModelId,
   abortGeneration,
   getDefaultModelId,
-  getLastStatsText,
+  getDeviceInfo,
+  getEngineKind,
+  getLastGenerationStats,
+  getLoadedContextSize,
   isAbortError,
   isEngineLostError,
   isStoragePersisted,
@@ -21,6 +25,7 @@ import { topRelevantEntries, embedChunks, topRelevantChunks, type TextChunk } fr
 import { extractTextFromFile, chunkText } from "@/lib/fileExtraction";
 import { extractSolePythonBlock } from "@/lib/agentCode";
 import { runPython } from "@/lib/pythonRunner";
+import { transcribeAudio } from "@/lib/speechRecognition";
 import ModelPicker from "@/components/ModelPicker";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import LoadingScreen from "@/components/LoadingScreen";
@@ -74,6 +79,10 @@ const MAX_AGENT_STEPS = 2;
 
 const MAX_TEXTAREA_HEIGHT = 160;
 
+const STUCK_GENERATION_TIMEOUT_MS = 45_000;
+const MAX_STUCK_RETRIES = 1;
+const MAX_LOAD_RETRIES = 2;
+
 export default function Chat({
   conversationId,
   onConversationChange,
@@ -102,7 +111,9 @@ export default function Chat({
   const [streaming, setStreaming] = useState(false);
   const [draftReply, setDraftReply] = useState("");
   const [wasmSupported] = useState(() => isWasmSupported());
-  const [lastStats, setLastStats] = useState<string | null>(null);
+  const [lastStats, setLastStats] = useState<GenerationStats | null>(null);
+  const [storagePersisted, setStoragePersisted] = useState<boolean | null>(null);
+  const [showStats, setShowStats] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; chunks: TextChunk[] } | null>(
     null
   );
@@ -110,6 +121,8 @@ export default function Chat({
   const [attachError, setAttachError] = useState<string | null>(null);
   const [agentMode, setAgentMode] = useState(false);
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
+  const [micState, setMicState] = useState<"idle" | "recording" | "transcribing">("idle");
+  const [micError, setMicError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -117,6 +130,8 @@ export default function Chat({
   const pendingReplyRef = useRef<string>("");
   const flushScheduledRef = useRef(false);
   const autoLoadStartedRef = useRef(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const statusDetailTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -148,6 +163,14 @@ export default function Chat({
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
@@ -161,40 +184,54 @@ export default function Chat({
     setProgressPct(null);
     setShowStatusDetail(false);
     if (statusDetailTimeoutRef.current) clearTimeout(statusDetailTimeoutRef.current);
-    const startedAt = performance.now();
-    let sawPartialProgress = false;
-    try {
-      await loadEngine(idToLoad, ({ loaded, total, text }) => {
-        if (loaded < total) sawPartialProgress = true;
-        if (text) {
-          setProgress(text);
+
+    for (let attempt = 0; attempt <= MAX_LOAD_RETRIES; attempt++) {
+      const startedAt = performance.now();
+      let sawPartialProgress = false;
+      try {
+        await loadEngine(idToLoad, ({ loaded, total, text }) => {
+          if (loaded < total) sawPartialProgress = true;
+          if (text) {
+            setProgress(text);
+            setProgressPct(null);
+            return;
+          }
+          const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
+          const mb = (n: number) => (n / (1024 * 1024)).toFixed(0);
+          setProgress(`Downloading model… ${pct}% (${mb(loaded)} / ${mb(total)} MB)`);
+          setProgressPct(total > 0 ? pct : null);
+        });
+        const seconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+        const persisted = await isStoragePersisted();
+        setStoragePersisted(persisted);
+        const persistNote =
+          persisted === false
+            ? " — storage isn't marked durable yet; install this app to your home screen to stop it being evicted between visits"
+            : "";
+        setProgress(
+          (sawPartialProgress
+            ? `Downloaded and loaded in ${seconds}s`
+            : `Loaded from local cache in ${seconds}s (no re-download)`) + persistNote
+        );
+        setHasLoadedOnce(true);
+        setStatus("ready");
+        setShowStatusDetail(true);
+        statusDetailTimeoutRef.current = setTimeout(() => setShowStatusDetail(false), 6000);
+        return;
+      } catch (err) {
+        console.error(err);
+        if (attempt < MAX_LOAD_RETRIES) {
+          const delayMs = 2000 * (attempt + 1);
+          setProgress(
+            `Load failed, retrying in ${Math.round(delayMs / 1000)}s… (attempt ${attempt + 2} of ${MAX_LOAD_RETRIES + 1})`
+          );
           setProgressPct(null);
-          return;
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
         }
-        const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
-        const mb = (n: number) => (n / (1024 * 1024)).toFixed(0);
-        setProgress(`Downloading model… ${pct}% (${mb(loaded)} / ${mb(total)} MB)`);
-        setProgressPct(total > 0 ? pct : null);
-      });
-      const seconds = ((performance.now() - startedAt) / 1000).toFixed(1);
-      const persisted = await isStoragePersisted();
-      const persistNote =
-        persisted === false
-          ? " — storage isn't marked durable yet; install this app to your home screen to stop it being evicted between visits"
-          : "";
-      setProgress(
-        (sawPartialProgress
-          ? `Downloaded and loaded in ${seconds}s`
-          : `Loaded from local cache in ${seconds}s (no re-download)`) + persistNote
-      );
-      setHasLoadedOnce(true);
-      setStatus("ready");
-      setShowStatusDetail(true);
-      statusDetailTimeoutRef.current = setTimeout(() => setShowStatusDetail(false), 6000);
-    } catch (err) {
-      console.error(err);
-      setErrorText(err instanceof Error ? err.message : String(err));
-      setStatus("error");
+        setErrorText(err instanceof Error ? err.message : String(err));
+        setStatus("error");
+      }
     }
   }
 
@@ -266,38 +303,65 @@ export default function Chat({
 
     try {
       for (let step = 0; ; step++) {
-        pendingReplyRef.current = "";
-        let full = "";
         const prefix = transcriptParts.join("");
+        let full = "";
 
-        const scheduleFlush = () => {
-          if (flushScheduledRef.current) return;
-          flushScheduledRef.current = true;
-          requestAnimationFrame(() => {
-            setDraftReply(prefix + pendingReplyRef.current);
-            flushScheduledRef.current = false;
-          });
-        };
+        for (let attempt = 0; ; attempt++) {
+          pendingReplyRef.current = "";
+          full = "";
+          let lastChunkAt = performance.now();
+          let sawFirstChunk = false;
+          let watchdogFired = false;
+          const watchdog = setInterval(() => {
+            if (sawFirstChunk && performance.now() - lastChunkAt > STUCK_GENERATION_TIMEOUT_MS) {
+              watchdogFired = true;
+              abortGeneration();
+            }
+          }, 2000);
 
-        try {
-          for await (const chunk of streamChat(messages, { temperature: opts?.temperature })) {
-            full += chunk;
-            pendingReplyRef.current = full;
-            scheduleFlush();
-          }
-        } catch (err) {
-          if (isEngineLostError(err)) {
-            console.error(err);
-            full =
-              full ||
-              "Your device unloaded the model to free up memory. Reloading it now — please try again in a moment.";
-            handleLoadModel(modelId);
-          } else if (isAbortError(err)) {
-            aborted = true;
-          } else {
-            console.error(err);
-            const detail = err instanceof Error ? err.message : String(err);
-            full = full || `Sorry, generation failed: ${detail}`;
+          const scheduleFlush = () => {
+            if (flushScheduledRef.current) return;
+            flushScheduledRef.current = true;
+            requestAnimationFrame(() => {
+              setDraftReply(prefix + pendingReplyRef.current);
+              flushScheduledRef.current = false;
+            });
+          };
+
+          try {
+            for await (const chunk of streamChat(messages, { temperature: opts?.temperature })) {
+              sawFirstChunk = true;
+              lastChunkAt = performance.now();
+              full += chunk;
+              pendingReplyRef.current = full;
+              scheduleFlush();
+            }
+            clearInterval(watchdog);
+            break;
+          } catch (err) {
+            clearInterval(watchdog);
+            if (watchdogFired && attempt < MAX_STUCK_RETRIES) {
+              continue;
+            }
+            if (watchdogFired) {
+              console.error("Generation stalled with no response", err);
+              full = full || "Generation stalled — please try again.";
+              break;
+            }
+            if (isEngineLostError(err)) {
+              console.error(err);
+              full =
+                full ||
+                "Your device unloaded the model to free up memory. Reloading it now — please try again in a moment.";
+              handleLoadModel(modelId);
+            } else if (isAbortError(err)) {
+              aborted = true;
+            } else {
+              console.error(err);
+              const detail = err instanceof Error ? err.message : String(err);
+              full = full || `Sorry, generation failed: ${detail}`;
+            }
+            break;
           }
         }
 
@@ -350,7 +414,7 @@ export default function Chat({
       setDraftReply("");
       setAgentStatus(null);
       setStreaming(false);
-      setLastStats(getLastStatsText());
+      setLastStats(getLastGenerationStats());
     }
   }
 
@@ -395,6 +459,58 @@ export default function Chat({
 
   function handleStop() {
     abortGeneration();
+  }
+
+  async function handleMicClick() {
+    if (micState === "recording") {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+    if (micState !== "idle") return;
+
+    setMicError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        audioChunksRef.current = [];
+        setMicState("transcribing");
+        const url = URL.createObjectURL(blob);
+        try {
+          const text = await transcribeAudio(url);
+          if (text) {
+            setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+            textareaRef.current?.focus();
+          } else {
+            setMicError("Didn't catch that — try again.");
+          }
+        } catch (err) {
+          console.error(err);
+          setMicError("Couldn't transcribe that. Try again.");
+        } finally {
+          URL.revokeObjectURL(url);
+          setMicState("idle");
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setMicState("recording");
+    } catch (err) {
+      console.error(err);
+      setMicError("Microphone access denied or unavailable.");
+      setMicState("idle");
+    }
   }
 
   async function handleAttachFile(file: File) {
@@ -483,13 +599,22 @@ export default function Chat({
       <div className="px-3 py-2 text-xs text-foreground-muted sm:px-5">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate">{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
-          <button
-            className="shrink-0 rounded-md px-2 py-1 transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
-            onClick={() => setChangingModel(true)}
-            disabled={streaming}
-          >
-            Change model
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              className="rounded-md px-2 py-1 transition-colors hover:bg-surface hover:text-foreground"
+              onClick={() => setShowStats((v) => !v)}
+              aria-expanded={showStats}
+            >
+              Stats
+            </button>
+            <button
+              className="rounded-md px-2 py-1 transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
+              onClick={() => setChangingModel(true)}
+              disabled={streaming}
+            >
+              Change model
+            </button>
+          </div>
         </div>
         <div
           className={`overflow-hidden transition-[max-height,opacity] duration-500 ease-out ${
@@ -498,6 +623,41 @@ export default function Chat({
         >
           {progress && <p>{progress}</p>}
         </div>
+        {showStats &&
+          (() => {
+            const engine = getEngineKind();
+            const device = getDeviceInfo();
+            const ctx = getLoadedContextSize();
+            return (
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-surface px-3 py-2">
+                <span>Engine</span>
+                <span className="text-foreground">
+                  {engine === "webgpu" ? "WebGPU (GPU)" : engine === "wasm" ? "WASM (CPU)" : "—"}
+                </span>
+                <span>Device</span>
+                <span className="text-foreground">
+                  {device.cores ? `${device.cores} cores` : "cores unknown"}
+                  {device.memoryGb ? ` · ~${device.memoryGb}GB RAM` : ""}
+                </span>
+                <span>Context window</span>
+                <span className="text-foreground">{ctx ? `${ctx} tokens` : "model default"}</span>
+                <span>Storage</span>
+                <span className="text-foreground">
+                  {storagePersisted === null
+                    ? "unknown"
+                    : storagePersisted
+                      ? "persisted ✓"
+                      : "not persisted ⚠"}
+                </span>
+                <span>Last reply</span>
+                <span className="text-foreground">
+                  {lastStats
+                    ? `${lastStats.tokens} tokens in ${lastStats.seconds.toFixed(1)}s (${lastStats.tokensPerSec.toFixed(1)} tok/s)`
+                    : "no replies yet"}
+                </span>
+              </div>
+            );
+          })()}
       </div>
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3 sm:px-5">
@@ -559,6 +719,22 @@ export default function Chat({
 
       <div className="px-3 pb-5 pt-2 sm:px-5">
         <div className="mx-auto w-full max-w-2xl">
+          {(micState !== "idle" || micError) && (
+            <div className="mb-2 flex items-center gap-2 text-xs">
+              {micState === "recording" && (
+                <span className="inline-flex items-center gap-1.5 text-red-500">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                  Listening… tap the mic to stop
+                </span>
+              )}
+              {micState === "transcribing" && (
+                <span className="text-foreground-muted">
+                  Transcribing on-device… (first time downloads a ~150MB speech model)
+                </span>
+              )}
+              {micError && <span className="text-red-500">{micError}</span>}
+            </div>
+          )}
           {(attachedFile || attachingFile || attachError) && (
             <div className="mb-2 flex items-center gap-2 text-xs">
               {attachingFile ? (
@@ -641,6 +817,35 @@ export default function Chat({
                 />
               </svg>
             </button>
+            <button
+              type="button"
+              aria-label={micState === "recording" ? "Stop recording" : "Record a voice message"}
+              title="Speak instead of typing — transcribed on-device, audio never leaves your browser. First use downloads a ~150MB speech model."
+              className={`mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 ${
+                micState === "recording"
+                  ? "bg-red-500 text-white"
+                  : "text-foreground-muted hover:bg-background hover:text-foreground"
+              }`}
+              onClick={handleMicClick}
+              disabled={streaming || micState === "transcribing"}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M19 11a7 7 0 0 1-14 0M12 19v3"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
             <textarea
               ref={textareaRef}
               rows={1}
@@ -680,7 +885,10 @@ export default function Chat({
             </button>
           </div>
           {lastStats && (
-            <p className="mt-2 text-center text-xs text-foreground-muted">{lastStats}</p>
+            <p className="mt-2 text-center text-xs text-foreground-muted">
+              {lastStats.tokensPerSec.toFixed(1)} tokens/sec
+              {lastStats.engine === "webgpu" ? " (GPU)" : ""}
+            </p>
           )}
         </div>
       </div>

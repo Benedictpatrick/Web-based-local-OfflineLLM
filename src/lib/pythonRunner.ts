@@ -25,7 +25,10 @@ async function getPyodide(): Promise<PyodideAPI> {
       await loadPyodideScript();
       if (!window.loadPyodide) throw new Error("Python runtime failed to initialize.");
       return window.loadPyodide({ indexURL: "/pyodide/" });
-    })();
+    })().catch((err) => {
+      pyodidePromise = null;
+      throw err;
+    });
   }
   return pyodidePromise;
 }
