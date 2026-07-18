@@ -19,6 +19,8 @@ import {
 } from "@/lib/llm";
 import { topRelevantEntries, embedChunks, topRelevantChunks, type TextChunk } from "@/lib/retrieval";
 import { extractTextFromFile, chunkText } from "@/lib/fileExtraction";
+import { extractSolePythonBlock } from "@/lib/agentCode";
+import { runPython } from "@/lib/pythonRunner";
 import ModelPicker from "@/components/ModelPicker";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import LoadingScreen from "@/components/LoadingScreen";
@@ -65,6 +67,11 @@ const CODE_PROMPT =
 const CODE_RE =
   /\b(code|program|programme|script|function|method|class|implement|algorithm|snippet|debug|fix (this|my)|error in|write.*(loop|api|query)|python|javascript|typescript|java|c\+\+|c#|golang|rust|kotlin|swift|sql|html|css|bash|regex)\b/i;
 
+const AGENT_INSTRUCTIONS =
+  "\n\nYou can run Python to compute exact answers. If the question needs a calculation, data processing, or verification you can't do reliably in your head, reply with ONLY a fenced ```python code block — the code fence and nothing else. Zero words before it, zero words after it, not even one sentence like \"this is a large number\" or \"let me compute this\". Just the code fence, full stop. Its output will be shown to you next, and you must then give the final answer in plain language using that output. Only do this when real computation is needed; for everything else, answer normally without code.";
+
+const MAX_AGENT_STEPS = 2;
+
 const MAX_TEXTAREA_HEIGHT = 160;
 
 export default function Chat({
@@ -101,6 +108,8 @@ export default function Chat({
   );
   const [attachingFile, setAttachingFile] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [agentMode, setAgentMode] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -226,68 +235,123 @@ export default function Chat({
       .slice(-MAX_HISTORY_MESSAGES)
       .map((m): ChatCompletionMessage => ({ role: m.role, content: m.content }));
 
-    const systemPrompt = isCodeRequest ? CODE_PROMPT : SYSTEM_PROMPT;
+    const systemPrompt = isCodeRequest
+      ? CODE_PROMPT
+      : SYSTEM_PROMPT + (agentMode ? AGENT_INSTRUCTIONS : "");
     await streamReply(
       [
         { role: "system", content: systemPrompt + (contextBlock ? `\n\n${contextBlock}` : "") },
         ...history,
       ],
       activeConversationId,
-      isCodeRequest ? { temperature: 0.3 } : undefined
+      {
+        temperature: isCodeRequest || agentMode ? 0.3 : undefined,
+        allowAgent: agentMode && !isCodeRequest,
+      }
     );
   }
 
   async function streamReply(
     promptMessages: ChatCompletionMessage[],
     activeConversationId: number,
-    opts?: { temperature?: number }
+    opts?: { temperature?: number; allowAgent?: boolean }
   ) {
     setStreaming(true);
     setDraftReply("");
-    pendingReplyRef.current = "";
-    let full = "";
+    setAgentStatus(null);
 
-    const scheduleFlush = () => {
-      if (flushScheduledRef.current) return;
-      flushScheduledRef.current = true;
-      requestAnimationFrame(() => {
-        setDraftReply(pendingReplyRef.current);
-        flushScheduledRef.current = false;
-      });
-    };
+    const transcriptParts: string[] = [];
+    let messages = promptMessages;
+    let aborted = false;
 
     try {
-      for await (const chunk of streamChat(promptMessages, opts)) {
-        full += chunk;
-        pendingReplyRef.current = full;
-        scheduleFlush();
-      }
-    } catch (err) {
-      if (isEngineLostError(err)) {
-        console.error(err);
-        full =
-          full ||
-          "Your device unloaded the model to free up memory. Reloading it now — please try again in a moment.";
-        handleLoadModel(modelId);
-      } else if (!isAbortError(err)) {
-        console.error(err);
-        const detail = err instanceof Error ? err.message : String(err);
-        full = full || `Sorry, generation failed: ${detail}`;
-      }
-    }
+      for (let step = 0; ; step++) {
+        pendingReplyRef.current = "";
+        let full = "";
+        const prefix = transcriptParts.join("");
 
-    if (full.trim()) {
-      await db.chat.add({
-        conversationId: activeConversationId,
-        role: "assistant",
-        content: full,
-        createdAt: Date.now(),
-      });
-      await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
+        const scheduleFlush = () => {
+          if (flushScheduledRef.current) return;
+          flushScheduledRef.current = true;
+          requestAnimationFrame(() => {
+            setDraftReply(prefix + pendingReplyRef.current);
+            flushScheduledRef.current = false;
+          });
+        };
+
+        try {
+          for await (const chunk of streamChat(messages, { temperature: opts?.temperature })) {
+            full += chunk;
+            pendingReplyRef.current = full;
+            scheduleFlush();
+          }
+        } catch (err) {
+          if (isEngineLostError(err)) {
+            console.error(err);
+            full =
+              full ||
+              "Your device unloaded the model to free up memory. Reloading it now — please try again in a moment.";
+            handleLoadModel(modelId);
+          } else if (isAbortError(err)) {
+            aborted = true;
+          } else {
+            console.error(err);
+            const detail = err instanceof Error ? err.message : String(err);
+            full = full || `Sorry, generation failed: ${detail}`;
+          }
+        }
+
+        const code =
+          !aborted && opts?.allowAgent && step < MAX_AGENT_STEPS
+            ? extractSolePythonBlock(full)
+            : null;
+
+        if (!code) {
+          transcriptParts.push(full);
+          break;
+        }
+
+        transcriptParts.push(full);
+        setDraftReply(transcriptParts.join(""));
+        setAgentStatus("Running code…");
+        let outputText: string;
+        try {
+          outputText = (await runPython(code)).output;
+        } catch (err) {
+          console.error(err);
+          const detail = err instanceof Error ? err.message : String(err);
+          outputText = `Couldn't run the code: ${detail}`;
+        }
+        setAgentStatus(null);
+        transcriptParts.push(`\n\n**Output:**\n\`\`\`\n${outputText}\n\`\`\`\n\n`);
+        setDraftReply(transcriptParts.join(""));
+
+        messages = [
+          ...messages,
+          { role: "assistant", content: full },
+          {
+            role: "user",
+            content: `Code output:\n${outputText}\n\nUsing this output, give the final answer in plain language. Don't run more code unless truly necessary, and don't repeat the code.`,
+          },
+        ];
+      }
+
+      const full = transcriptParts.join("");
+      if (full.trim()) {
+        await db.chat.add({
+          conversationId: activeConversationId,
+          role: "assistant",
+          content: full,
+          createdAt: Date.now(),
+        });
+        await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
+      }
+    } finally {
+      setDraftReply("");
+      setAgentStatus(null);
+      setStreaming(false);
+      setLastStats(getLastStatsText());
     }
-    setDraftReply("");
-    setStreaming(false);
-    setLastStats(getLastStatsText());
   }
 
   async function handleSend() {
@@ -470,7 +534,15 @@ export default function Chat({
               <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
               <div className="min-w-0 flex-1 pt-1">
                 {draftReply ? (
-                  <MarkdownMessage content={draftReply} />
+                  <>
+                    <MarkdownMessage content={draftReply} />
+                    {agentStatus && (
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                        {agentStatus}
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <span className="inline-flex gap-1">
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.3s]" />
@@ -539,6 +611,29 @@ export default function Chat({
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path
                   d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-pressed={agentMode}
+              aria-label="Toggle auto-run code"
+              title="Let the assistant run Python automatically to compute exact answers"
+              className={`mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 ${
+                agentMode
+                  ? "bg-accent text-accent-foreground"
+                  : "text-foreground-muted hover:bg-background hover:text-foreground"
+              }`}
+              onClick={() => setAgentMode((v) => !v)}
+              disabled={streaming}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"
                   stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
