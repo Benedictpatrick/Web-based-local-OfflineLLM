@@ -6,20 +6,6 @@ declare global {
   }
 }
 
-// Lazily loaded and cached — pages that never click "Run" never pay for the
-// ~13MB Pyodide runtime. Self-hosted from public/pyodide (see
-// scripts/sync-pyodide.mjs) rather than Pyodide's CDN, so the feature keeps
-// working offline after the first run, same as everything else here.
-//
-// Honest exception to "works offline after first load": that first Run
-// still needs a real network fetch for the runtime, same as the LLM models
-// on first use — this isn't pre-cached by the service worker the way the
-// KaTeX assets are.
-//
-// Loaded via a real <script> tag rather than `import("pyodide")` — the
-// package's ESM build has a fully-dynamic import(url) internally that
-// Turbopack can't statically analyze and fails on at runtime. The UMD
-// build loaded this way is untouched by the bundler entirely.
 let pyodidePromise: Promise<PyodideAPI> | null = null;
 
 function loadPyodideScript(): Promise<void> {
@@ -54,17 +40,10 @@ export async function runPython(code: string): Promise<PythonRunResult> {
   const lines: string[] = [];
   pyodide.setStdout({ batched: (line) => lines.push(line) });
   pyodide.setStderr({ batched: (line) => lines.push(line) });
-  // Left unconfigured, Pyodide's default stdin falls back to the browser's
-  // native window.prompt() — a blank, unstyled dialog with no indication of
-  // what it wants, popping up over the app. There's no UI here to feed it a
-  // real answer, so make input() fail loud and readable (a normal Python
-  // EOFError in the output pane) instead of surfacing that dialog at all.
   pyodide.setStdin({ stdin: () => null });
 
   try {
     const result = await pyodide.runPythonAsync(code);
-    // A bare expression on the last line (e.g. a REPL-style `x + 1`) returns
-    // a value instead of printing — surface it the way a notebook cell would.
     if (result !== undefined && result !== null) {
       lines.push(String(result));
     }

@@ -35,27 +35,32 @@ export const AVAILABLE_MODELS = [
 export type ModelId = (typeof AVAILABLE_MODELS)[number]["id"];
 export type ProgressInfo = { loaded: number; total: number; text?: string };
 
-// wllama (CPU/WASM) state — always available as the universal fallback.
 let wllama: Wllama | null = null;
 let wllamaLoadingPromise: Promise<Wllama> | null = null;
 let lastWasmTimings: { predicted_per_second?: number } | null = null;
 
-// web-llm (WebGPU) state — used only on devices with a real GPU adapter.
 let webllmEngine: MLCEngine | null = null;
 let webllmLoadingPromise: Promise<MLCEngine> | null = null;
+let webllmMlcId: string | null = null;
 let lastWebgpuTokPerSec: number | null = null;
 
 let loadedModelId: ModelId | null = null;
 let engineKind: "webgpu" | "wasm" | null = null;
 let webGpuAvailablePromise: Promise<boolean> | null = null;
 
-// wllama takes an AbortSignal per-request rather than exposing an
-// interrupt() method like web-llm does, so we track the controller for
-// whichever generation is currently in flight on the wasm path.
 let wasmAbortController: AbortController | null = null;
 
 export function isWasmSupported(): boolean {
   return typeof WebAssembly !== "undefined";
+}
+
+function isMobileDevice(): boolean {
+  return typeof navigator !== "undefined" && /Mobi|Android/i.test(navigator.userAgent);
+}
+
+export async function getDefaultModelId(): Promise<ModelId> {
+  if (isMobileDevice()) return "llama3.2-1b";
+  return (await hasWebGpu()) ? "llama3.2-3b" : "llama3.2-1b";
 }
 
 async function hasWebGpu(): Promise<boolean> {
@@ -63,10 +68,6 @@ async function hasWebGpu(): Promise<boolean> {
   webGpuAvailablePromise = (async () => {
     if (typeof navigator === "undefined" || !("gpu" in navigator)) return false;
     try {
-      // A returned adapter (even a "fallback" one, per the spec) means the
-      // browser can actually initialize WebGPU here — the field to avoid is
-      // adapter.info.isFallbackAdapter, which moved locations across Chrome
-      // versions and isn't worth trusting for a simple go/no-go check.
       const adapter = await (
         navigator as unknown as { gpu: { requestAdapter: () => Promise<unknown | null> } }
       ).gpu.requestAdapter();
@@ -110,9 +111,6 @@ export async function loadEngine(
       loadedModelId = modelId;
       return;
     } catch (err) {
-      // A real adapter existing doesn't guarantee the model actually runs
-      // on it (shader-compile OOM, driver quirks, etc.) — fall back to the
-      // universal CPU path rather than leaving the device stuck.
       console.error("WebGPU engine failed, falling back to CPU/WASM:", err);
       engineKind = "wasm";
     }
@@ -133,20 +131,24 @@ async function loadWebgpuEngine(
   if (webllmLoadingPromise) return webllmLoadingPromise;
 
   webllmLoadingPromise = (async () => {
-    const webllm = await import("@mlc-ai/web-llm");
-    const engine = await webllm.CreateMLCEngine(mlcId, {
-      initProgressCallback: onProgress
-        ? (report) =>
-            onProgress({
-              loaded: Math.round(report.progress * 1000),
-              total: 1000,
-              text: report.text,
-            })
-        : undefined,
-    });
-    webllmEngine = engine;
-    webllmLoadingPromise = null;
-    return engine;
+    try {
+      const webllm = await import("@mlc-ai/web-llm");
+      const engine = await webllm.CreateMLCEngine(mlcId, {
+        initProgressCallback: onProgress
+          ? (report) =>
+              onProgress({
+                loaded: Math.round(report.progress * 1000),
+                total: 1000,
+                text: report.text,
+              })
+          : undefined,
+      });
+      webllmEngine = engine;
+      webllmMlcId = mlcId;
+      return engine;
+    } finally {
+      webllmLoadingPromise = null;
+    }
   })();
 
   return webllmLoadingPromise;
@@ -175,36 +177,11 @@ async function loadWasmEngine(
       { allowOffline: true }
     );
 
-    // wllama's multi-thread startup speculatively tries to allocate a large
-    // (up to 4GB) SharedArrayBuffer-backed WASM memory block, stepping down
-    // in ~128MB increments until one succeeds. On a desktop with plenty of
-    // RAM that's a non-issue; on a phone it can plausibly thrash the whole
-    // device, not just this tab, while it works through failing attempts —
-    // a very plausible cause of "lagging everywhere, not just generation".
-    // Force single-thread on mobile to skip that path entirely: slower
-    // tokens/sec, but avoids that memory-pressure cliff.
-    const isMobile =
-      typeof navigator !== "undefined" && /Mobi|Android/i.test(navigator.userAgent);
+    const isMobile = isMobileDevice();
 
     const loadParams = {
-      // Smaller context = smaller KV-cache allocation up front. On a
-      // memory-constrained phone (often a few hundred MB per tab), a
-      // large reserved allocation is a real source of slowdowns and
-      // tab kills, not just a theoretical concern — 2048 is still
-      // plenty for a short chat/journal conversation.
       n_ctx: isMobile ? 1024 : 2048,
-      // llama.cpp's default n_batch (2048) sizes the compute buffer as
-      // n_batch * vocab_size; Qwen2.5's vocab is ~152k tokens, so the
-      // default alone reserves close to 1GB just for that buffer. That's
-      // a strong candidate for the WASM memory-growth abort ("(ABORT)")
-      // seen on phones — cut it down hard on mobile since a chat prompt
-      // doesn't need a large batch anyway.
       n_batch: isMobile ? 128 : undefined,
-      // Tested 2-thread mode here (n_batch capped, so the earlier OOM
-      // theory didn't apply): it hung for 60+s on a simple 3-sentence
-      // prompt on a desktop with plenty of RAM/cores, vs ~13s total on
-      // single-thread. That's a real deadlock in this build's pthread
-      // sync path, not a speed tradeoff — keep single-thread on mobile.
       n_threads: isMobile ? 1 : undefined,
       progressCallback: onProgress
         ? ({ loaded, total }: { loaded: number; total: number }) =>
@@ -213,24 +190,22 @@ async function loadWasmEngine(
     };
 
     try {
-      await instance.loadModelFromHF({ repo: model.repo, file: model.file }, loadParams);
-    } catch (err) {
-      // Storage eviction on the device can leave stale cache metadata
-      // behind (the index says a file is cached, but the actual bytes are
-      // gone) — wllama surfaces that as "Model file not found" instead of
-      // just re-downloading. Clear the stale entry and retry fresh rather
-      // than surfacing that as a scary, unrecoverable error.
-      const isStaleCacheError =
-        err instanceof Error && /model file not found/i.test(err.message);
-      if (!isStaleCacheError) throw err;
+      try {
+        await instance.loadModelFromHF({ repo: model.repo, file: model.file }, loadParams);
+      } catch (err) {
+        const isStaleCacheError =
+          err instanceof Error && /model file not found/i.test(err.message);
+        if (!isStaleCacheError) throw err;
 
-      await instance.cacheManager.clear().catch(() => {});
-      await instance.loadModelFromHF({ repo: model.repo, file: model.file }, loadParams);
+        await instance.cacheManager.clear().catch(() => {});
+        await instance.loadModelFromHF({ repo: model.repo, file: model.file }, loadParams);
+      }
+
+      wllama = instance;
+      return instance;
+    } finally {
+      wllamaLoadingPromise = null;
     }
-
-    wllama = instance;
-    wllamaLoadingPromise = null;
-    return instance;
   })();
 
   return wllamaLoadingPromise;
@@ -244,11 +219,6 @@ export function getEngineKind(): "webgpu" | "wasm" | null {
   return engineKind;
 }
 
-// Both engines cache to browser storage independently (wllama to OPFS via
-// CacheManager, web-llm to the Cache API), and which one a given device
-// used depends on WebGPU availability at load time — which could differ
-// between visits. Check/delete both so "delete this model" actually frees
-// the space regardless of which engine downloaded it.
 export async function isModelCached(modelId: ModelId): Promise<boolean> {
   const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
   if (!model) return false;
@@ -290,9 +260,7 @@ export async function deleteModelCache(modelId: ModelId): Promise<void> {
   try {
     const webllm = await import("@mlc-ai/web-llm");
     await webllm.deleteModelAllInfoInCache(model.mlcId);
-  } catch {
-    // Not cached via web-llm, or web-llm unavailable — nothing to do.
-  }
+  } catch {}
 }
 
 export function getLastStatsText(): string | null {
@@ -314,10 +282,6 @@ export async function* streamChat(
   yield* streamWasmChat(messages);
 }
 
-// web-llm exposes an interrupt() call that lets its own generation loop
-// wind down cleanly (the async generator just stops yielding); wllama has
-// no equivalent, so the wasm path is stopped by aborting the AbortSignal
-// passed into its own request instead.
 export function abortGeneration(): void {
   if (engineKind === "webgpu") {
     webllmEngine?.interruptGenerate();
@@ -326,38 +290,47 @@ export function abortGeneration(): void {
   wasmAbortController?.abort();
 }
 
-// Aborting is a normal user action, not a failure — callers should show
-// whatever text streamed so far rather than an error for this case.
 export function isAbortError(err: unknown): boolean {
   return err instanceof WllamaAbortError || (err instanceof Error && err.name === "AbortError");
+}
+
+export function isEngineLostError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return (
+    err.name === "ModelNotLoadedError" ||
+    err.name === "DeviceLostError" ||
+    /model not loaded|device.*lost|engine not loaded/i.test(err.message)
+  );
+}
+
+function createWebgpuCompletion(engine: MLCEngine, messages: ChatCompletionMessage[]) {
+  return engine.chat.completions.create({
+    messages: messages as never,
+    stream: true,
+    stream_options: { include_usage: true },
+    max_tokens: 768,
+    temperature: 0.5,
+    top_p: 0.9,
+    repetition_penalty: 1.1,
+  });
 }
 
 async function* streamWebgpuChat(
   messages: ChatCompletionMessage[]
 ): AsyncGenerator<string> {
-  if (!webllmEngine) {
+  const engine = webllmEngine;
+  if (!engine) {
     throw new Error("Engine not loaded yet");
   }
 
-  const result = await webllmEngine.chat.completions.create({
-    messages: messages as never,
-    stream: true,
-    stream_options: { include_usage: true },
-    // 150 was fine for short chat replies but silently truncated code
-    // answers mid-function — a cut-off function is worse than a slightly
-    // longer wait, so give code room to actually finish.
-    max_tokens: 768,
-    temperature: 0.7,
-    top_p: 0.9,
-    // Same fix as the wasm path's penalty_repeat below: small models degrade
-    // into repeating/contradicting themselves (e.g. describing a left child
-    // and right child identically) without a repetition penalty. web-llm's
-    // OpenAI-shaped API calls this repetition_penalty rather than
-    // penalty_repeat, but it's the same lever — was missing here entirely,
-    // which is why WebGPU (the path most users with a real GPU hit) was the
-    // one actually showing the degraded output.
-    repetition_penalty: 1.15,
-  });
+  let result: Awaited<ReturnType<typeof createWebgpuCompletion>>;
+  try {
+    result = await createWebgpuCompletion(engine, messages);
+  } catch (err) {
+    if (!isEngineLostError(err) || !webllmMlcId) throw err;
+    await engine.reload(webllmMlcId);
+    result = await createWebgpuCompletion(engine, messages);
+  }
 
   for await (const chunk of result) {
     const usage = chunk.usage as { extra?: { decode_tokens_per_s?: number } } | undefined;
@@ -383,17 +356,11 @@ async function* streamWasmChat(
     stream: true,
     timings_per_token: true,
     abortSignal: wasmAbortController.signal,
-    // 150 silently truncated code answers mid-function. This path is the
-    // slower CPU fallback, so keep the ceiling lower than the GPU path's
-    // (worst-case wait matters more here), but still enough room to
-    // actually finish a typical code snippet instead of cutting it off.
     max_tokens: 512,
-    // Small models (0.5B-3B) degrade into repetition/rambling without these —
-    // temperature alone isn't enough sampling control for low-parameter models.
-    temp: 0.7,
+    temp: 0.5,
     top_p: 0.9,
     min_p: 0.05,
-    penalty_repeat: 1.15,
+    penalty_repeat: 1.1,
     penalty_last_n: 128,
   });
 

@@ -4,9 +4,6 @@ export interface JournalEntry {
   id: number;
   text: string;
   createdAt: number;
-  // Sentence embedding for semantic retrieval, computed on save. Optional
-  // because entries created before this field existed won't have one yet —
-  // retrieval backfills those lazily on first use.
   embedding?: number[];
 }
 
@@ -36,10 +33,6 @@ db.version(1).stores({
   chat: "++id, createdAt",
 });
 
-// v2 introduces multiple conversations (like ChatGPT/Claude's chat history)
-// instead of one continuous message list. Existing messages predate this and
-// have no conversationId — fold them into a single "Previous chat" thread
-// on upgrade so nobody's history silently disappears.
 db.version(2)
   .stores({
     journal: "++id, createdAt",

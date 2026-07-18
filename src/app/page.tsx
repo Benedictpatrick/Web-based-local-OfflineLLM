@@ -54,9 +54,6 @@ export default function Home() {
         </nav>
       </header>
       <main className="min-h-0 flex-1">
-        {/* Both stay mounted so Chat keeps its loaded-model state when you
-            switch to Notes and back — unmounting it would lose that
-            component-local status even though the model stays in memory. */}
         <div className={tab === "chat" ? "h-full" : "hidden"}>
           <Chat conversationId={conversationId} onConversationChange={setConversationId} />
         </div>

@@ -39,12 +39,6 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      {/* Served from public/ rather than imported from node_modules so the URL
-          stays unhashed — the service worker precaches this stylesheet and its
-          fonts by name, and it can't name a content-hashed filename ahead of
-          time. That's the whole reason maths renders offline, so the usual
-          "just import it" advice from the rule below doesn't apply here.
-          See scripts/sync-katex.mjs. */}
       {/* eslint-disable-next-line @next/next/no-css-tags */}
       <link rel="stylesheet" href="/katex/katex.min.css" precedence="default" />
       <body className="min-h-full flex flex-col">

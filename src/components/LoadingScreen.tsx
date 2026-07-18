@@ -1,9 +1,5 @@
 "use client";
 
-// Letters bounce with a staggered delay, same animate-bounce + per-element
-// animationDelay pattern already used for the streaming "thinking" dots in
-// Chat.tsx — reusing it here keeps the two loading indicators visually
-// related instead of introducing a second, unrelated motion style.
 const WORDMARK = ["N", "a", "v", "o"];
 
 export default function LoadingScreen({
@@ -66,9 +62,6 @@ export default function LoadingScreen({
                 style={{ width: `${progressPct}%` }}
               />
             ) : (
-              // No percentage yet (engine init / shader compile phase reports
-              // text, not bytes) — an indeterminate shimmer still reads as
-              // "working" rather than a stalled, motionless bar.
               <div className="loading-shimmer h-full w-full" />
             )}
           </div>

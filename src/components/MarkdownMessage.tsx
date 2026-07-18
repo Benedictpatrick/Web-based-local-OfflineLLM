@@ -9,20 +9,6 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { runPython } from "@/lib/pythonRunner";
 
-// Bridges the gap between the LaTeX small models actually emit and the narrow
-// slice remark-math accepts. Two mismatches, both verified against the parser:
-//
-//   1. Models use \(…\) and \[…\] about as often as the dollar forms, and
-//      remark-math understands only dollars — the rest renders as literal
-//      backslashes.
-//   2. remark-math treats a one-line $$x$$ as *inline* math; display mode
-//      needs the $$ fences on their own lines. Models overwhelmingly write
-//      the one-line form, so without this every display equation comes out
-//      cramped inline instead of centered on its own row.
-//
-// None of it may touch code, where a backslash-paren is the author's literal
-// text (a regex, an escape) rather than a formula. Splitting on a capture
-// group parks code spans at odd indices so they pass through untouched.
 function normalizeMathDelimiters(markdown: string): string {
   return markdown
     .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
@@ -30,16 +16,11 @@ function normalizeMathDelimiters(markdown: string): string {
       i % 2 === 1
         ? segment
         : segment
-            // Blank lines around the fence keep the block out of an adjacent
-            // paragraph, which math-flow can't interrupt.
             .replace(
               /\\\[([\s\S]+?)\\\]/g,
               (_, body) => `\n\n$$\n${body.trim()}\n$$\n\n`
             )
             .replace(/\\\(([\s\S]+?)\\\)/g, (_, body) => `$${body}$`)
-            // Only promote a $$…$$ that owns its whole line, and only at
-            // column 0: indented math is usually inside a list item, where
-            // injecting blank lines would split the list apart.
             .replace(
               /^\$\$([^\n]+?)\$\$[ \t]*$/gm,
               (_, body) => `\n\n$$\n${body.trim()}\n$$\n\n`
@@ -48,15 +29,8 @@ function normalizeMathDelimiters(markdown: string): string {
     .join("");
 }
 
-// Pyodide only — running arbitrary JS in a Worker isn't a real sandbox (it
-// can still fetch()), so that's not offered here at all rather than
-// mislabeled as safe. Python covers the common case for this app anyway.
 const RUNNABLE_LANGUAGES = new Set(["python", "py"]);
 
-// The system prompt asks the model to tag fences with a language, but a
-// 1B/3B model doesn't reliably do it — the block comes through as untagged
-// "text" as often as not. Guess Python from content in that case so Run and
-// syntax highlighting still work instead of silently not offering either.
 const PYTHON_SIGNATURE =
   /(^|\n)\s*(def |class |import |from \S+ import |print\(|if __name__ == ['"]__main__['"])/;
 
@@ -139,9 +113,6 @@ function CodeBlock({ language: rawLanguage, code }: { language: string; code: st
   );
 }
 
-// react-markdown v9+ dropped the `inline` flag from the code renderer —
-// block-level fenced code is distinguished by being wrapped in a `pre`,
-// so that's the reliable place to detect it, not `code` itself.
 const components: Components = {
   code({ className, children, ...rest }) {
     return (
@@ -186,9 +157,6 @@ export default function MarkdownMessage({ content }: { content: string }) {
     <div className="max-w-none text-[15px] leading-relaxed [&>*:last-child]:mb-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        // throwOnError would turn one malformed formula from a 1B model into a
-        // thrown render — and this renders mid-stream, on every token, over
-        // half-finished LaTeX. Render the bad bit in red and keep going.
         rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
         components={components}
       >

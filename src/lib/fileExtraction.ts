@@ -1,6 +1,3 @@
-// Text extraction for the "chat about a file" feature. Runs entirely
-// client-side — pdf.js is lazily imported so pages that never attach a file
-// never pay for it.
 const MAX_PDF_PAGES = 200;
 
 async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
@@ -29,8 +26,6 @@ export async function extractTextFromFile(file: File): Promise<string> {
   return file.text();
 }
 
-// Character-based, not sentence/paragraph-aware — simple and good enough for
-// picking relevant excerpts out of lecture notes or a textbook chapter.
 export function chunkText(text: string, chunkSize = 600): string[] {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return [];

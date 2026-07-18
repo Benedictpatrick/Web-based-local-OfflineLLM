@@ -5,10 +5,6 @@ import { db, type Conversation } from "@/lib/db";
 
 type Bucket = { label: string; items: Conversation[] };
 
-// Buckets by local calendar day so a chat from this morning and one from
-// 11pm two days ago don't get lumped into one unordered flat list — the same
-// recency grouping ChatGPT/Claude use, which starts to matter once there are
-// more than a handful of conversations to scan.
 function groupByRecency(conversations: Conversation[]): Bucket[] {
   const startOfDay = (t: number) => {
     const d = new Date(t);
@@ -67,9 +63,6 @@ export default function ChatHistory({
 
   return (
     <>
-      {/* Always mounted (rather than `if (!open) return null`) so the
-          transform/opacity below can transition on both open AND close —
-          an early return can only ever animate one direction. */}
       <div
         className={`fixed inset-0 z-20 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
           open ? "opacity-100" : "pointer-events-none opacity-0"

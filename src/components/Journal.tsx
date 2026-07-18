@@ -20,8 +20,6 @@ export default function Journal() {
     setDraft("");
     setSaving(true);
     try {
-      // Embed before writing so the note is searchable the moment it
-      // appears, rather than waiting for retrieval to backfill it later.
       const embedding = await embed(text);
       await db.journal.add({ text, createdAt: Date.now(), embedding });
     } finally {

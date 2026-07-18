@@ -8,8 +8,10 @@ import {
   AVAILABLE_MODELS,
   type ModelId,
   abortGeneration,
+  getDefaultModelId,
   getLastStatsText,
   isAbortError,
+  isEngineLostError,
   isStoragePersisted,
   isWasmSupported,
   loadEngine,
@@ -21,10 +23,6 @@ import ModelPicker from "@/components/ModelPicker";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import LoadingScreen from "@/components/LoadingScreen";
 
-// Memoized so streaming updates (draftReply changing 60x/sec) don't force
-// React to re-diff every past message bubble on every token — on a phone
-// CPU, re-rendering a long history that often was the actual source of the
-// "choppy" streaming text, not the token itself.
 const MessageHistory = memo(function MessageHistory({
   messages,
 }: {
@@ -52,16 +50,15 @@ const MessageHistory = memo(function MessageHistory({
   );
 });
 
-// The maths instruction is load-bearing, not decoration: the renderer only
-// understands LaTeX, and a 1B-3B model left to itself writes "O(n log n)" or
-// unicode "√" as plain prose, which renders as exactly that. Spelling out the
-// delimiters is what makes the formatting actually fire.
 const SYSTEM_PROMPT =
-  "You are a private, on-device study assistant for a computer science and software engineering student, running entirely offline — nothing the user says ever leaves this browser. Keep replies short: 1-3 sentences unless the user clearly asks for more detail, a list, or code. Answer directly first, then stop — do not pad, repeat yourself, or restate the question. Always respond to the user's most recent message specifically — if it changes topic or asks something unrelated to earlier turns, address the new request directly instead of continuing the previous subject. When writing code, always use a markdown fenced code block with the language name (e.g. ```python), write the complete, correct, working code with no placeholders or omitted parts, and briefly explain it before or after the block. Write all mathematics as LaTeX, never as plain text or unicode symbols: inline maths between single dollar signs (like $O(n \\log n)$) and standalone equations between double dollar signs (like $$T(n) = 2T(n/2) + O(n)$$). Use this for complexity and Big-O, recurrences, summations, logarithms, sets, probability and matrices. When notes context is provided, use it naturally to personalize your answer, but don't mention that you were 'given context' unless asked.";
+  "You are Navo, a private study assistant for a computer science student, running entirely on this device — nothing the user types ever leaves their browser. Always answer the user's most recent message, directly and briefly: 1-3 sentences unless they ask for detail, a list, or code. Never include code unless they explicitly ask for code; when they do, give complete working code in a fenced block tagged with the language name. Code must be plain code with no LaTeX in it. Outside of code, write any mathematics in LaTeX delimiters: $...$ inline, $$...$$ for standalone equations, never plain text or unicode symbols. If saved notes are provided below, use them naturally without mentioning them.";
 
-// Caps the message composer's auto-grow so a long pasted paragraph or code
-// block scrolls inside the box instead of pushing the send button and the
-// rest of the page down indefinitely.
+const SMALL_TALK_PROMPT =
+  "You are Navo, a friendly private study assistant. The user is greeting you or making small talk. Reply with one short, warm sentence that answers them and invites a question.";
+
+const SMALL_TALK_RE =
+  /^(hi+|hii+|hey+( there)?|hello+|yo+|sup|wassup|what'?s up|howdy|good (morning|afternoon|evening|night)|how are you( doing)?|how'?s it going|thank(s| you)( so much| a lot)?|ok(ay)?|cool|nice|great|bye+|goodbye|see you|hola|namaste)[\s!.?,]*$/i;
+
 const MAX_TEXTAREA_HEIGHT = 160;
 
 export default function Chat({
@@ -108,9 +105,6 @@ export default function Chat({
   const statusDetailTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // "smooth" stacks a new scroll animation on every token during a slow
-    // CPU-bound stream, which looks like the UI glitching. Only auto-scroll
-    // when already near the bottom, and jump instantly.
     const container = scrollContainerRef.current;
     if (!container) return;
     const distanceFromBottom =
@@ -121,30 +115,23 @@ export default function Chat({
   }, [messages, draftReply]);
 
   useEffect(() => {
-    // Auto-start the default model on first mount so there's no manual "Load
-    // model" click to get through — ref guard (not just checking status)
-    // because effects run twice under StrictMode in dev, and a second
-    // concurrent call here would race a fresh setStatus("loading") against
-    // the first call's in-flight promise.
     if (autoLoadStartedRef.current || !wasmSupported) return;
     autoLoadStartedRef.current = true;
-    handleLoadModel();
+    (async () => {
+      const id = await getDefaultModelId();
+      setModelId(id);
+      handleLoadModel(id);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    // Intentionally reads .current at cleanup time, not at effect-run time —
-    // the timeout it clears is scheduled later, by handleLoadModel, so there
-    // is nothing meaningful to capture when this effect itself runs.
     return () => {
       if (statusDetailTimeoutRef.current) clearTimeout(statusDetailTimeoutRef.current);
     };
   }, []);
 
   useEffect(() => {
-    // Auto-grow the composer with its content instead of scrolling text
-    // sideways inside a fixed-height box. Re-measuring from "auto" (not just
-    // growing) means it also shrinks back down after a send clears `input`.
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
@@ -185,10 +172,6 @@ export default function Chat({
           : `Loaded from local cache in ${seconds}s (no re-download)`) + persistNote
       );
       setStatus("ready");
-      // Shown briefly then auto-collapsed rather than left pinned above the
-      // conversation forever — this line (load time, cache/download source,
-      // the storage-persistence nudge) matters right after loading and is
-      // dead weight on every visit after that.
       setShowStatusDetail(true);
       statusDetailTimeoutRef.current = setTimeout(() => setShowStatusDetail(false), 6000);
     } catch (err) {
@@ -198,11 +181,15 @@ export default function Chat({
     }
   }
 
-  // Shared by both a fresh send and a regenerate — the only difference
-  // between them is what precedes this call (a newly-saved user message vs.
-  // a deleted-and-about-to-be-replaced assistant one), not how the reply
-  // itself gets built and streamed.
   async function generateReply(activeConversationId: number, userText: string) {
+    if (SMALL_TALK_RE.test(userText.trim())) {
+      await streamReply([
+        { role: "system", content: SMALL_TALK_PROMPT },
+        { role: "user", content: userText },
+      ], activeConversationId);
+      return;
+    }
+
     const relevant = await topRelevantEntries(userText, journalEntries ?? [], 3);
     const notesBlock =
       relevant.length > 0
@@ -211,9 +198,6 @@ export default function Chat({
             .join("\n")}\n\n`
         : "";
 
-    // Kept to 3 short excerpts, not the whole file — the small models here
-    // run with a 1-2k token context window, so a generously-sized file
-    // context would crowd out the actual conversation history.
     const fileChunks = attachedFile
       ? await topRelevantChunks(userText, attachedFile.chunks, 3)
       : [];
@@ -226,16 +210,6 @@ export default function Chat({
 
     const contextBlock = notesBlock + fileBlock;
 
-    // Sending the full history means prefill cost (and thus lag) grows with
-    // every message, and can eventually overflow the context window. Cap it
-    // to the most recent turns. Also: a system-prompt-only instruction to
-    // "follow the latest message" gets diluted by a long history for a
-    // small model — it kept continuing an earlier topic (e.g. replying
-    // about linked lists to an unrelated "give a discussion topic" ask)
-    // even with that instruction in place. A short history plus a
-    // reminder placed directly next to the actual question (where small
-    // models attend much more strongly) is more reliable than either
-    // alone.
     const MAX_HISTORY_MESSAGES = 6;
     const history = (
       await db.chat.where("conversationId").equals(activeConversationId).sortBy("createdAt")
@@ -243,11 +217,19 @@ export default function Chat({
       .slice(-MAX_HISTORY_MESSAGES)
       .map((m): ChatCompletionMessage => ({ role: m.role, content: m.content }));
 
-    const promptMessages: ChatCompletionMessage[] = [
-      { role: "system", content: SYSTEM_PROMPT + (contextBlock ? `\n\n${contextBlock}` : "") },
-      ...history,
-    ];
+    await streamReply(
+      [
+        { role: "system", content: SYSTEM_PROMPT + (contextBlock ? `\n\n${contextBlock}` : "") },
+        ...history,
+      ],
+      activeConversationId
+    );
+  }
 
+  async function streamReply(
+    promptMessages: ChatCompletionMessage[],
+    activeConversationId: number
+  ) {
     setStreaming(true);
     setDraftReply("");
     pendingReplyRef.current = "";
@@ -269,16 +251,19 @@ export default function Chat({
         scheduleFlush();
       }
     } catch (err) {
-      if (isAbortError(err)) {
-        // User hit Stop — keep whatever streamed so far, not an error.
-      } else {
+      if (isEngineLostError(err)) {
+        console.error(err);
+        full =
+          full ||
+          "Your device unloaded the model to free up memory. Reloading it now — please try again in a moment.";
+        handleLoadModel(modelId);
+      } else if (!isAbortError(err)) {
         console.error(err);
         const detail = err instanceof Error ? err.message : String(err);
         full = full || `Sorry, generation failed: ${detail}`;
       }
     }
 
-    // Stopped before any tokens came back — nothing worth saving.
     if (full.trim()) {
       await db.chat.add({
         conversationId: activeConversationId,
@@ -301,9 +286,6 @@ export default function Chat({
 
     let activeConversationId = conversationId;
     if (!activeConversationId) {
-      // First message of a fresh chat — create its conversation now (not
-      // eagerly on "New chat") so switching to a blank chat and back out
-      // without typing anything doesn't leave clutter in the history list.
       const now = Date.now();
       activeConversationId = await db.conversations.add({
         title: text.slice(0, 60),
@@ -550,10 +532,6 @@ export default function Chat({
               disabled={streaming}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                // Shift+Enter inserts a newline (default textarea behavior,
-                // left alone); plain Enter sends. isComposing guards against
-                // IME confirmation keystrokes (e.g. Japanese/Chinese input)
-                // being read as "send".
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   handleSend();
