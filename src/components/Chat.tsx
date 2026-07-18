@@ -284,7 +284,7 @@ export default function Chat({
         setStoragePersisted(persisted);
         const persistNote =
           persisted === false
-            ? " — storage isn't marked durable yet; install this app to your home screen to stop it being evicted between visits"
+            ? ". Storage isn't marked durable yet; install this app to your home screen to stop it being evicted between visits"
             : "";
         setProgress(
           (sawPartialProgress
@@ -632,7 +632,7 @@ export default function Chat({
               Navo
             </div>
             <p className="max-w-xs text-sm text-foreground-muted">
-              A private study assistant that runs entirely on this device — nothing you type
+              A private study assistant that runs entirely on this device. Nothing you type
               ever leaves your browser, and it keeps working offline.
             </p>
           </>
@@ -690,46 +690,31 @@ export default function Chat({
     <div className="flex h-full flex-col">
       <div className="px-3 py-2 text-xs text-foreground-muted sm:px-5">
         <div className="flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-1.5 truncate rounded-full bg-surface px-2.5 py-1">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+          <button
+            type="button"
+            className="flex min-w-0 items-center gap-1 truncate transition-colors hover:text-foreground disabled:opacity-50"
+            onClick={() => setChangingModel(true)}
+            disabled={streaming}
+          >
             <span className="truncate">{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
-          </span>
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              className={`flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors hover:bg-surface hover:text-foreground ${
-                showStats ? "bg-surface text-foreground" : ""
-              }`}
-              onClick={() => setShowStats((v) => !v)}
-              aria-expanded={showStats}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M5 20V10M12 20V4M19 20v-6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Stats
-            </button>
-            <button
-              className="flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
-              onClick={() => setChangingModel(true)}
-              disabled={streaming}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M3 12a9 9 0 0 1 15.3-6.4M21 12a9 9 0 0 1-15.3 6.4M3 5v6h6M21 19v-6h-6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Change model
-            </button>
-          </div>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="shrink-0">
+              <path
+                d="M6 9l6 6 6-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={`shrink-0 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
+            onClick={() => setShowStats((v) => !v)}
+            aria-expanded={showStats}
+          >
+            Stats
+          </button>
         </div>
         <div
           className={`overflow-hidden transition-[max-height,opacity] duration-500 ease-out ${
