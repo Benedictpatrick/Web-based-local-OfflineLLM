@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="public/banner.png" alt="Navo Banner" width="100%">
+<img src="public/banner-v2.png" alt="Navo Banner" width="100%">
 
 <br/>
 
@@ -78,7 +78,7 @@ Optimized for a responsive, touch-friendly interface across mobile, tablet, and 
 
 #### Offline Caching & PWA Lifecycle
 
-![Navo Offline Caching & PWA Lifecycle](public/pwa-caching.png)
+![Navo Offline Caching & PWA Lifecycle](public/pwa-caching-v2.png)
 
 ---
 
@@ -86,13 +86,13 @@ Optimized for a responsive, touch-friendly interface across mobile, tablet, and 
 
 Navo shifts the entire AI pipeline from the cloud to the client. The diagram below illustrates how user interactions, note saving, and files are managed on-device.
 
-![Navo On-Device AI Architecture](public/architecture.png)
+![Navo On-Device AI Architecture](public/architecture-v2.png)
 
 ### Local Database Schema
 
 Navo uses Dexie.js as a wrapper around the browser's IndexedDB to store user conversations, messages, and semantic notes along with vector embeddings:
 
-![Navo Local Database Schema](public/database-schema.png)
+![Navo Local Database Schema](public/database-schema-v2.png)
 
 ---
 
