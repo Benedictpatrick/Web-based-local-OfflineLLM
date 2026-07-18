@@ -51,3 +51,8 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Local AI-assistant config (not part of the project)
+CLAUDE.md
+AGENTS.md
+.claude/
