@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { unstable_catchError, type ErrorInfo } from "next/error";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -145,16 +146,28 @@ const components: Components = {
   },
 };
 
+function MarkdownFallback(_props: object, { error }: ErrorInfo) {
+  return (
+    <p className="text-sm text-red-500">
+      Couldn&apos;t render this message{error.message ? `: ${error.message}` : ""}.
+    </p>
+  );
+}
+
+const MarkdownErrorBoundary = unstable_catchError(MarkdownFallback);
+
 export default function MarkdownMessage({ content }: { content: string }) {
   return (
-    <div className="max-w-none text-[15px] leading-relaxed [&>*:last-child]:mb-0">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
-        components={components}
-      >
-        {normalizeMathDelimiters(content)}
-      </ReactMarkdown>
-    </div>
+    <MarkdownErrorBoundary>
+      <div className="max-w-none text-[15px] leading-relaxed [&>*:last-child]:mb-0">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
+          components={components}
+        >
+          {normalizeMathDelimiters(content)}
+        </ReactMarkdown>
+      </div>
+    </MarkdownErrorBoundary>
   );
 }

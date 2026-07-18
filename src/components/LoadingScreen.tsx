@@ -9,6 +9,7 @@ export default function LoadingScreen({
   modelLabel,
   errorText,
   onRetry,
+  onChangeModel,
 }: {
   status: "idle" | "loading" | "error";
   progress: string;
@@ -16,6 +17,7 @@ export default function LoadingScreen({
   modelLabel: string;
   errorText: string;
   onRetry: () => void;
+  onChangeModel: () => void;
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 px-6 text-center">
@@ -42,13 +44,22 @@ export default function LoadingScreen({
             {errorText ? `: ${errorText}` : ""}. Check your connection for the
             first download — after that it works offline.
           </p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
-          >
-            Retry
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={onChangeModel}
+              className="text-xs text-foreground-muted hover:text-foreground hover:underline"
+            >
+              Try a different model
+            </button>
+          </div>
         </div>
       ) : (
         <div className="flex w-full max-w-xs flex-col items-center gap-3">

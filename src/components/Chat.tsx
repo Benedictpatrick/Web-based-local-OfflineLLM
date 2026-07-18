@@ -108,6 +108,7 @@ export default function Chat({
   const pendingReplyRef = useRef<string>("");
   const flushScheduledRef = useRef(false);
   const autoLoadStartedRef = useRef(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const statusDetailTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -126,7 +127,7 @@ export default function Chat({
     (async () => {
       const id = await getDefaultModelId();
       setModelId(id);
-      handleLoadModel(id);
+      setChangingModel(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -177,6 +178,7 @@ export default function Chat({
           ? `Downloaded and loaded in ${seconds}s`
           : `Loaded from local cache in ${seconds}s (no re-download)`) + persistNote
       );
+      setHasLoadedOnce(true);
       setStatus("ready");
       setShowStatusDetail(true);
       statusDetailTimeoutRef.current = setTimeout(() => setShowStatusDetail(false), 6000);
@@ -363,7 +365,15 @@ export default function Chat({
   if (changingModel) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-foreground-muted">Choose a model to load</p>
+        <p className="text-sm text-foreground-muted">
+          {hasLoadedOnce ? "Choose a model to load" : "Choose a model to get started"}
+        </p>
+        {!hasLoadedOnce && (
+          <p className="max-w-xs text-xs text-foreground-muted">
+            {AVAILABLE_MODELS.find((m) => m.id === modelId)?.label} is recommended for this
+            device, but you can pick a smaller one if downloads or loading are slow.
+          </p>
+        )}
         <div className="flex w-full max-w-xs items-center gap-2">
           <ModelPicker
             value={modelId}
@@ -377,13 +387,15 @@ export default function Chat({
             }}
           />
         </div>
-        <button
-          type="button"
-          className="text-xs text-foreground-muted hover:text-foreground hover:underline"
-          onClick={() => setChangingModel(false)}
-        >
-          Cancel
-        </button>
+        {hasLoadedOnce && (
+          <button
+            type="button"
+            className="text-xs text-foreground-muted hover:text-foreground hover:underline"
+            onClick={() => setChangingModel(false)}
+          >
+            Cancel
+          </button>
+        )}
       </div>
     );
   }
@@ -397,6 +409,7 @@ export default function Chat({
         modelLabel={AVAILABLE_MODELS.find((m) => m.id === modelId)?.label ?? modelId}
         errorText={errorText}
         onRetry={() => handleLoadModel(modelId)}
+        onChangeModel={() => setChangingModel(true)}
       />
     );
   }
