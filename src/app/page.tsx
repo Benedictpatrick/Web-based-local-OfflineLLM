@@ -31,10 +31,7 @@ export default function Home() {
               />
             </svg>
           </button>
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="logo-mark h-6 w-6 shrink-0 rounded-lg" aria-hidden="true" />
-            <h1 className="truncate text-base font-semibold tracking-tight">Navo</h1>
-          </div>
+          <h1 className="truncate text-base font-semibold tracking-tight">Navo</h1>
         </div>
         <TabSwitcher active={tab} onChange={setTab} />
       </header>
