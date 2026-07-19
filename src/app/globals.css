@@ -97,6 +97,43 @@ body {
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
+.glass-bar {
+  background: color-mix(in srgb, var(--background) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.glass-chip {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  backdrop-filter: blur(10px) url(#tab-glass) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #fff 10%, transparent),
+    inset 0 1px 0 0 color-mix(in srgb, #fff 20%, transparent),
+    inset 0 -1.5px 2px -1px color-mix(in srgb, #000 18%, transparent),
+    0 1px 2px color-mix(in srgb, #000 12%, transparent);
+  transition:
+    background-color 200ms,
+    box-shadow 200ms;
+}
+
+.glass-chip:hover {
+  background: color-mix(in srgb, var(--foreground) 11%, transparent);
+}
+
+.logo-mark {
+  background: radial-gradient(
+    circle at 30% 25%,
+    color-mix(in srgb, var(--accent) 85%, #fff),
+    var(--accent)
+  );
+  box-shadow:
+    inset 0 1px 1px color-mix(in srgb, #fff 45%, transparent),
+    inset 0 -2px 3px color-mix(in srgb, #000 20%, transparent),
+    0 1px 3px color-mix(in srgb, #000 25%, transparent);
+}
+
 .tab-switcher__pill {
   position: absolute;
   top: 2px;

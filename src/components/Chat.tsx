@@ -719,10 +719,11 @@ export default function Chat({
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
-            className="flex min-w-0 items-center gap-1 truncate transition-colors hover:text-foreground disabled:opacity-50"
+            className="glass-chip flex min-w-0 items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors hover:text-foreground disabled:opacity-50"
             onClick={() => setChangingModel(true)}
             disabled={streaming}
           >
+            <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" aria-hidden="true" />
             <span className="truncate">{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="shrink-0">
               <path
@@ -736,10 +737,19 @@ export default function Chat({
           </button>
           <button
             type="button"
-            className={`shrink-0 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
+            className={`glass-chip flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
             onClick={() => setShowStats((v) => !v)}
             aria-expanded={showStats}
           >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
+              <path
+                d="M4 20V10M10 20V4M16 20v-7M22 20H2"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
             Stats
           </button>
         </div>

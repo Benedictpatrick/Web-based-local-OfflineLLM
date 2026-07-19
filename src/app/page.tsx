@@ -15,14 +15,14 @@ export default function Home() {
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
-      <header className="flex items-center justify-between gap-2 px-3 py-3 sm:px-5">
-        <div className="flex min-w-0 items-center gap-1">
+      <header className="glass-bar relative z-10 flex items-center justify-between gap-2 px-3 py-2.5 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2">
           <button
             aria-label="Chat history"
-            className="shrink-0 rounded-md p-1.5 text-foreground-muted transition-colors hover:bg-surface hover:text-foreground"
+            className="glass-chip flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground"
             onClick={() => setHistoryOpen(true)}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
               <path
                 d="M4 6h16M4 12h16M4 18h16"
                 stroke="currentColor"
@@ -31,7 +31,10 @@ export default function Home() {
               />
             </svg>
           </button>
-          <h1 className="truncate text-base font-semibold tracking-tight">Navo</h1>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="logo-mark h-6 w-6 shrink-0 rounded-lg" aria-hidden="true" />
+            <h1 className="truncate text-base font-semibold tracking-tight">Navo</h1>
+          </div>
         </div>
         <TabSwitcher active={tab} onChange={setTab} />
       </header>
