@@ -25,7 +25,7 @@ import { topRelevantEntries, embedChunks, topRelevantChunks, type TextChunk } fr
 import { extractTextFromFile, chunkText } from "@/lib/fileExtraction";
 import { extractSolePythonBlock } from "@/lib/agentCode";
 import { runPython } from "@/lib/pythonRunner";
-import { transcribeAudio } from "@/lib/speechRecognition";
+import { transcribeAudio, type SpeechModelProgress } from "@/lib/speechRecognition";
 import { haptic } from "@/lib/haptics";
 import ModelPicker from "@/components/ModelPicker";
 import MarkdownMessage from "@/components/MarkdownMessage";
@@ -197,6 +197,7 @@ export default function Chat({
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [micState, setMicState] = useState<"idle" | "recording" | "transcribing">("idle");
   const [micError, setMicError] = useState<string | null>(null);
+  const [micProgress, setMicProgress] = useState<SpeechModelProgress | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -579,13 +580,13 @@ export default function Chat({
         setMicState("transcribing");
         const url = URL.createObjectURL(blob);
         try {
-          const text = await transcribeAudio(url);
+          const text = await transcribeAudio(url, setMicProgress);
           if (text) {
             setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
             textareaRef.current?.focus();
           } else {
             haptic("warning");
-            setMicError("Didn't catch that — try again.");
+            setMicError("Didn't catch that. Try again.");
           }
         } catch (err) {
           console.error(err);
@@ -594,6 +595,7 @@ export default function Chat({
         } finally {
           URL.revokeObjectURL(url);
           setMicState("idle");
+          setMicProgress(null);
         }
       };
 
@@ -904,7 +906,15 @@ export default function Chat({
               )}
               {micState === "transcribing" && (
                 <span className="text-foreground-muted">
-                  Transcribing on your device… (first time downloads a ~150MB speech model)
+                  {micProgress
+                    ? `Downloading speech model… ${Math.round(
+                        (micProgress.loaded / micProgress.total) * 100
+                      )}% (${(micProgress.loaded / 1024 / 1024).toFixed(0)} / ${(
+                        micProgress.total /
+                        1024 /
+                        1024
+                      ).toFixed(0)} MB)`
+                    : "Transcribing on your device…"}
                 </span>
               )}
               {micError && <span className="text-red-500">{micError}</span>}
