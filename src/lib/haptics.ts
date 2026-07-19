@@ -12,12 +12,33 @@ export function isHapticSupported(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
 }
 
+export type HapticLogEntry = { pattern: HapticPattern; accepted: boolean; at: number };
+
+const MAX_LOG_ENTRIES = 20;
+const log: HapticLogEntry[] = [];
+const listeners = new Set<(log: HapticLogEntry[]) => void>();
+
+export function getHapticLog(): HapticLogEntry[] {
+  return log;
+}
+
+export function onHapticLogChange(cb: (log: HapticLogEntry[]) => void): () => void {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
 /** Returns whether the browser accepted the vibration request — not whether the device actually buzzed. */
 export function haptic(pattern: HapticPattern = "tap"): boolean {
-  if (!isHapticSupported()) return false;
-  try {
-    return navigator.vibrate(PATTERNS[pattern]);
-  } catch {
-    return false;
+  let accepted = false;
+  if (isHapticSupported()) {
+    try {
+      accepted = navigator.vibrate(PATTERNS[pattern]);
+    } catch {
+      accepted = false;
+    }
   }
+  log.push({ pattern, accepted, at: Date.now() });
+  if (log.length > MAX_LOG_ENTRIES) log.shift();
+  for (const cb of listeners) cb(log);
+  return accepted;
 }

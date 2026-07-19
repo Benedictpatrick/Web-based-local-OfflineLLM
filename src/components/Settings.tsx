@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { db } from "@/lib/db";
 import { AVAILABLE_MODELS, deleteModelCache, isModelCached, type ModelId } from "@/lib/llm";
-import { haptic, isHapticSupported } from "@/lib/haptics";
+import {
+  getHapticLog,
+  haptic,
+  isHapticSupported,
+  onHapticLogChange,
+  type HapticLogEntry,
+} from "@/lib/haptics";
 
 const REPO_URL = "https://github.com/Benedictpatrick/Web-based-local-OfflineLLM";
 const AUTHOR_NAME = "Benedict Patrick";
@@ -53,6 +59,9 @@ export default function Settings({ onChangeModel }: { onChangeModel: () => void 
   const [confirmClear, setConfirmClear] = useState<"chat" | "notes" | null>(null);
   const [cleared, setCleared] = useState<"chat" | "notes" | null>(null);
   const [hapticResult, setHapticResult] = useState<"accepted" | "rejected" | null>(null);
+  const [hapticLog, setHapticLog] = useState<HapticLogEntry[]>(() => getHapticLog());
+
+  useEffect(() => onHapticLogChange((log) => setHapticLog([...log])), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +190,25 @@ export default function Settings({ onChangeModel }: { onChangeModel: () => void 
               )
             }
           />
+          {isHapticSupported() && (
+            <div className="px-4 py-3">
+              <p className="mb-1.5 text-xs font-medium text-foreground-muted">
+                Recent activity {hapticLog.length === 0 && "(none yet — try sending a message or switching tabs)"}
+              </p>
+              {hapticLog.length > 0 && (
+                <div className="flex flex-col-reverse gap-1 font-mono text-xs text-foreground-muted">
+                  {hapticLog.map((entry, i) => (
+                    <div key={i}>
+                      {new Date(entry.at).toLocaleTimeString()} — {entry.pattern} —{" "}
+                      <span className={entry.accepted ? "text-accent" : "text-red-500"}>
+                        {entry.accepted ? "accepted" : "rejected"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </SectionCard>
 
         <SectionCard title="Data">
