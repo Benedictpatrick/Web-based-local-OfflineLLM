@@ -66,7 +66,7 @@ function isMobileDevice(): boolean {
   return typeof navigator !== "undefined" && /Mobi|Android/i.test(navigator.userAgent);
 }
 
-/** True when the browser reports <=2GB of device memory. Under-reports on some devices
+/** True when the browser reports <=2GB of device memory. Reports low on some devices
  *  (deviceMemory is capped/rounded for fingerprinting) but is the best signal available. */
 function isLowMemoryDevice(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -286,7 +286,7 @@ export function getLastGenerationStats(): GenerationStats | null {
   return lastGenerationStats;
 }
 
-/** Context window size in tokens for the loaded WASM model, or null (WebGPU uses the model's built-in default). */
+/** Context window size in tokens for the loaded WASM model, or null (WebGPU uses the model's own default). */
 export function getLoadedContextSize(): number | null {
   return engineKind === "wasm" ? loadedNCtx : null;
 }

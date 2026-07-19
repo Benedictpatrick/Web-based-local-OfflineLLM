@@ -25,7 +25,7 @@ async function getTranscriber(): Promise<Transcriber> {
 }
 
 /**
- * Transcribes audio entirely on-device via a local Whisper model — the audio
+ * Transcribes audio entirely on your device via a local Whisper model. The audio
  * never leaves the browser. `audioUrl` may be an object URL created from a
  * recorded Blob.
  */

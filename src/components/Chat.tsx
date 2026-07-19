@@ -291,7 +291,7 @@ export default function Chat({
         setProgress(
           (sawPartialProgress
             ? `Downloaded and loaded in ${seconds}s`
-            : `Loaded from local cache in ${seconds}s (no re-download)`) + persistNote
+            : `Loaded from local cache in ${seconds}s (no download needed)`) + persistNote
         );
         setHasLoadedOnce(true);
         setStatus("ready");
@@ -631,7 +631,7 @@ export default function Chat({
     return (
       <div className="p-6 text-sm text-red-600 dark:text-red-400">
         Your browser doesn&apos;t support WebAssembly, which is required to run
-        the model on-device. Try a recent version of Chrome, Edge, Firefox, or
+        the model on your device. Try a recent version of Chrome, Edge, Firefox, or
         Safari.
       </div>
     );
@@ -894,7 +894,7 @@ export default function Chat({
               )}
               {micState === "transcribing" && (
                 <span className="text-foreground-muted">
-                  Transcribing on-device… (first time downloads a ~150MB speech model)
+                  Transcribing on your device… (first time downloads a ~150MB speech model)
                 </span>
               )}
               {micError && <span className="text-red-500">{micError}</span>}
@@ -979,7 +979,7 @@ export default function Chat({
                 <button
                   type="button"
                   aria-pressed={agentMode}
-                  aria-label="Toggle auto-run code"
+                  aria-label="Toggle automatic code running"
                   title="Let the assistant run Python automatically to compute exact answers"
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 sm:h-9 sm:w-9 ${
                     agentMode
@@ -1004,7 +1004,7 @@ export default function Chat({
                 <button
                   type="button"
                   aria-label={micState === "recording" ? "Stop recording" : "Record a voice message"}
-                  title="Speak instead of typing — transcribed on-device, audio never leaves your browser. First use downloads a ~150MB speech model."
+                  title="Speak instead of typing. Transcribed on your device, audio never leaves your browser. First use downloads a ~150MB speech model."
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 sm:h-9 sm:w-9 ${
                     micState === "recording"
                       ? "bg-red-500 text-white"

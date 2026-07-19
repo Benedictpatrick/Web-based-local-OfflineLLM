@@ -22,7 +22,7 @@ describe("extractSolePythonBlock", () => {
     expect(extractSolePythonBlock("```python\nprint(1)\n```\nThat should work.")).toBe("print(1)");
   });
 
-  it("returns null for a non-python fence", () => {
+  it("returns null for a fence that isn't python", () => {
     expect(extractSolePythonBlock("```javascript\nconsole.log(1)\n```")).toBeNull();
   });
 

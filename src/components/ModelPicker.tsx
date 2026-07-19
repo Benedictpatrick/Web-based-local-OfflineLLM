@@ -56,7 +56,7 @@ export default function ModelPicker({
   }, [open]);
 
   async function handleDelete(id: ModelId, label: string) {
-    if (!window.confirm(`Delete the downloaded "${label}" model? You'll need to re-download it to use it again.`)) {
+    if (!window.confirm(`Delete the downloaded "${label}" model? You'll need to download it again to use it.`)) {
       return;
     }
     haptic("warning");
