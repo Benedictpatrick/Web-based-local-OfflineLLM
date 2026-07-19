@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
 import { AVAILABLE_MODELS, deleteModelCache, isModelCached, type ModelId } from "@/lib/llm";
 import {
@@ -60,6 +60,13 @@ export default function Settings({ onChangeModel }: { onChangeModel: () => void 
   const [cleared, setCleared] = useState<"chat" | "notes" | null>(null);
   const [hapticResult, setHapticResult] = useState<"accepted" | "rejected" | null>(null);
   const [hapticLog, setHapticLog] = useState<HapticLogEntry[]>(() => getHapticLog());
+  // navigator.vibrate support never changes after mount, so there's nothing to subscribe
+  // to — this just needs a client-only snapshot without a server/client hydration mismatch.
+  const hapticSupported = useSyncExternalStore(
+    () => () => {},
+    isHapticSupported,
+    () => false
+  );
 
   useEffect(() => onHapticLogChange((log) => setHapticLog([...log])), []);
 
@@ -168,7 +175,7 @@ export default function Settings({ onChangeModel }: { onChangeModel: () => void 
           <Row
             label="Haptic feedback"
             description={
-              isHapticSupported()
+              hapticSupported
                 ? hapticResult === "accepted"
                   ? "Sent a vibrate command to your device just now — if you didn't feel it, check your phone's ringer/silent mode, not this app."
                   : hapticResult === "rejected"
@@ -177,7 +184,7 @@ export default function Settings({ onChangeModel }: { onChangeModel: () => void 
                 : "Not supported in this browser (this is normal on iPhone — Safari doesn't support it)."
             }
             action={
-              isHapticSupported() ? (
+              hapticSupported ? (
                 <button
                   type="button"
                   className="rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:bg-background"
@@ -190,7 +197,7 @@ export default function Settings({ onChangeModel }: { onChangeModel: () => void 
               )
             }
           />
-          {isHapticSupported() && (
+          {hapticSupported && (
             <div className="px-4 py-3">
               <p className="mb-1.5 text-xs font-medium text-foreground-muted">
                 Recent activity {hapticLog.length === 0 && "(none yet — try sending a message or switching tabs)"}
