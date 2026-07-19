@@ -669,7 +669,7 @@ export default function Chat({
             return memoryGb !== null && memoryGb <= 2 ? (
               <p className="max-w-xs text-xs text-amber-500">
                 Your device is reporting limited memory ({memoryGb}GB). Even the smallest model
-                may crash this tab — closing other apps and tabs first can help.
+                may crash this tab. Closing other apps and tabs first can help.
               </p>
             ) : null;
           })()}
