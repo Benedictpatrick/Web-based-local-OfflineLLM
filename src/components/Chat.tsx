@@ -441,6 +441,7 @@ export default function Chat({
               handleLoadModel(modelId);
             } else if (isAbortError(err)) {
               aborted = true;
+              full = full || "Stopped.";
             } else {
               console.error(err);
               const detail = err instanceof Error ? err.message : String(err);
@@ -485,16 +486,17 @@ export default function Chat({
         ];
       }
 
-      const full = transcriptParts.join("");
-      if (full.trim()) {
-        await db.chat.add({
-          conversationId: activeConversationId,
-          role: "assistant",
-          content: full,
-          createdAt: Date.now(),
-        });
-        await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
+      let full = transcriptParts.join("");
+      if (!full.trim()) {
+        full = "Sorry, I didn't generate a response there — please try again.";
       }
+      await db.chat.add({
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: full,
+        createdAt: Date.now(),
+      });
+      await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
     } finally {
       setDraftReply("");
       setAgentStatus(null);
