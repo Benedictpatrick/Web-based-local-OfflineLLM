@@ -6,10 +6,47 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
+import cpp from "react-syntax-highlighter/dist/esm/languages/prism/cpp";
+import csharp from "react-syntax-highlighter/dist/esm/languages/prism/csharp";
+import css from "react-syntax-highlighter/dist/esm/languages/prism/css";
+import java from "react-syntax-highlighter/dist/esm/languages/prism/java";
+import javascript from "react-syntax-highlighter/dist/esm/languages/prism/javascript";
+import json from "react-syntax-highlighter/dist/esm/languages/prism/json";
+import jsx from "react-syntax-highlighter/dist/esm/languages/prism/jsx";
+import markdown from "react-syntax-highlighter/dist/esm/languages/prism/markdown";
+import markup from "react-syntax-highlighter/dist/esm/languages/prism/markup";
+import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
+import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
+import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
+import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import { runPython } from "@/lib/pythonRunner";
 import { guessLanguage } from "@/lib/codeLanguage";
+
+// PrismLight ships no grammars by default, so register the ones the assistant
+// actually emits. These mirror codeLanguage.ts plus the common tags models tag
+// blocks with. Unregistered languages fall back to plain text.
+for (const [name, syntax] of [
+  ["bash", bash],
+  ["cpp", cpp],
+  ["csharp", csharp],
+  ["css", css],
+  ["java", java],
+  ["javascript", javascript],
+  ["json", json],
+  ["jsx", jsx],
+  ["markdown", markdown],
+  ["markup", markup],
+  ["html", markup],
+  ["python", python],
+  ["sql", sql],
+  ["tsx", tsx],
+  ["typescript", typescript],
+] as const) {
+  SyntaxHighlighter.registerLanguage(name, syntax);
+}
 
 function normalizeMathDelimiters(markdown: string): string {
   return markdown

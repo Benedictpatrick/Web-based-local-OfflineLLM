@@ -48,6 +48,7 @@ export default function Home() {
         </div>
         <div className={tab === "settings" ? "h-full" : "hidden"}>
           <Settings
+            active={tab === "settings"}
             onChangeModel={() => {
               setTab("chat");
               chatRef.current?.openModelPicker();

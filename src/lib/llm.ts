@@ -1,8 +1,6 @@
-import {
+import type {
   Wllama,
-  CacheManager,
-  WllamaAbortError,
-  type ChatCompletionMessage,
+  ChatCompletionMessage,
 } from "@wllama/wllama/esm/index.js";
 import type { MLCEngine } from "@mlc-ai/web-llm";
 
@@ -44,6 +42,15 @@ export type GenerationStats = {
 
 let wllama: Wllama | null = null;
 let wllamaLoadingPromise: Promise<Wllama> | null = null;
+
+/**
+ * Loads the wllama bundle on demand. It is only needed for the WASM fallback
+ * path, so keeping it out of the initial bundle spares every WebGPU user the
+ * download.
+ */
+function importWllama() {
+  return import("@wllama/wllama/esm/index.js");
+}
 
 let webllmEngine: MLCEngine | null = null;
 let webllmLoadingPromise: Promise<MLCEngine> | null = null;
@@ -188,6 +195,7 @@ async function loadWasmEngine(
       wllama = null;
     }
 
+    const { Wllama } = await importWllama();
     const instance = new Wllama(
       { default: "/wllama/wllama.wasm" },
       { allowOffline: true }
@@ -242,8 +250,10 @@ export async function isModelCached(modelId: ModelId): Promise<boolean> {
   const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
   if (!model) return false;
 
-  const wllamaCached = await new CacheManager()
-    .getSize(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
+  const wllamaCached = await importWllama()
+    .then(({ CacheManager }) =>
+      new CacheManager().getSize(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
+    )
     .then((size) => size > 0)
     .catch(() => false);
   if (wllamaCached) return true;
@@ -272,8 +282,10 @@ export async function deleteModelCache(modelId: ModelId): Promise<void> {
     loadedModelId = null;
   }
 
-  await new CacheManager()
-    .delete(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
+  await importWllama()
+    .then(({ CacheManager }) =>
+      new CacheManager().delete(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
+    )
     .catch(() => {});
 
   try {
@@ -321,7 +333,8 @@ export function abortGeneration(): void {
 }
 
 export function isAbortError(err: unknown): boolean {
-  return err instanceof WllamaAbortError || (err instanceof Error && err.name === "AbortError");
+  // WllamaAbortError sets its own name to "AbortError", so the name check covers it too.
+  return err instanceof Error && err.name === "AbortError";
 }
 
 export function isEngineLostError(err: unknown): boolean {

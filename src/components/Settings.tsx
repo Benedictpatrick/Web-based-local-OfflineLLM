@@ -46,14 +46,23 @@ const DANGER_BUTTON =
 const DANGER_BUTTON_IDLE = "border-red-500/40 text-red-500 hover:bg-red-500 hover:text-white";
 const DANGER_BUTTON_CONFIRM = "border-red-500 bg-red-500 text-white";
 
-export default function Settings({ onChangeModel }: { onChangeModel: () => void }) {
+export default function Settings({
+  active,
+  onChangeModel,
+}: {
+  active: boolean;
+  onChangeModel: () => void;
+}) {
   const [cached, setCached] = useState<Partial<Record<ModelId, boolean>>>({});
   const [deletingId, setDeletingId] = useState<ModelId | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<ModelId | null>(null);
   const [confirmClear, setConfirmClear] = useState<"chat" | "notes" | null>(null);
   const [cleared, setCleared] = useState<"chat" | "notes" | null>(null);
 
+  // Settings stays mounted behind the tab switcher, so the cache probe waits
+  // until the panel is actually shown rather than running at page load.
   useEffect(() => {
+    if (!active) return;
     let cancelled = false;
     for (const m of AVAILABLE_MODELS) {
       isModelCached(m.id).then((isCached) => {
@@ -63,7 +72,7 @@ export default function Settings({ onChangeModel }: { onChangeModel: () => void 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [active]);
 
   async function handleDeleteModel(id: ModelId) {
     setDeletingId(id);
