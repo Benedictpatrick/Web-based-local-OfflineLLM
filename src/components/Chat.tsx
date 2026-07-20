@@ -22,6 +22,12 @@ import {
   streamChat,
 } from "@/lib/llm";
 import { topRelevantEntries, embedChunks, topRelevantChunks, type TextChunk } from "@/lib/retrieval";
+import {
+  isMemoryEnabled,
+  buildMemoriesBlock,
+  topRelevantMemories,
+  saveExtractedMemories,
+} from "@/lib/memory";
 import { extractTextFromFile, chunkText } from "@/lib/fileExtraction";
 import { extractSolePythonBlock } from "@/lib/agentCode";
 import { runPython } from "@/lib/pythonRunner";
@@ -331,6 +337,10 @@ export default function Chat({
             .join("\n")}\n\n`
         : "";
 
+    const memoriesBlock = isMemoryEnabled()
+      ? buildMemoriesBlock(await topRelevantMemories(userText, 3))
+      : "";
+
     const fileChunks = attachedFile
       ? await topRelevantChunks(userText, attachedFile.chunks, 3)
       : [];
@@ -341,7 +351,7 @@ export default function Chat({
             .join("\n")}\n\n`
         : "";
 
-    const contextBlock = notesBlock + fileBlock;
+    const contextBlock = notesBlock + memoriesBlock + fileBlock;
 
     const isCodeRequest = CODE_RE.test(userText);
     const MAX_HISTORY_MESSAGES = isCodeRequest ? 2 : 6;
@@ -365,6 +375,12 @@ export default function Chat({
         allowAgent: agentMode && !isCodeRequest,
       }
     );
+
+    // Learn durable facts from the user's message after the reply has streamed,
+    // so it never delays the first token. Fire and forget; failures are ignored.
+    if (isMemoryEnabled()) {
+      void saveExtractedMemories(userText).catch(() => {});
+    }
   }
 
   async function streamReply(

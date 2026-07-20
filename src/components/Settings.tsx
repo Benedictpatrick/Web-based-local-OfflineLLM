@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { AVAILABLE_MODELS, deleteModelCache, isModelCached, type ModelId } from "@/lib/llm";
+import { isMemoryEnabled, setMemoryEnabled } from "@/lib/memory";
 import { haptic } from "@/lib/haptics";
 
 const REPO_URL = "https://github.com/Benedictpatrick/Web-based-local-OfflineLLM";
@@ -56,8 +58,17 @@ export default function Settings({
   const [cached, setCached] = useState<Partial<Record<ModelId, boolean>>>({});
   const [deletingId, setDeletingId] = useState<ModelId | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<ModelId | null>(null);
-  const [confirmClear, setConfirmClear] = useState<"chat" | "notes" | null>(null);
-  const [cleared, setCleared] = useState<"chat" | "notes" | null>(null);
+  // Start from the server-safe default so hydration matches, then correct to the
+  // stored preference after mount (deferred so it doesn't run during the effect).
+  const [memoryOn, setMemoryOn] = useState(true);
+  const memories = useLiveQuery(() => db.memories.orderBy("createdAt").reverse().toArray(), [], []);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMemoryOn(isMemoryEnabled()));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const [confirmClear, setConfirmClear] = useState<"chat" | "notes" | "memories" | null>(null);
+  const [cleared, setCleared] = useState<"chat" | "notes" | "memories" | null>(null);
 
   // Settings stays mounted behind the tab switcher, so the cache probe waits
   // until the panel is actually shown rather than running at page load.
@@ -96,13 +107,15 @@ export default function Settings({
     setTimeout(() => setConfirmDeleteId((cur) => (cur === id ? null : cur)), 4000);
   }
 
-  function handleClearClick(target: "chat" | "notes") {
+  function handleClearClick(target: "chat" | "notes" | "memories") {
     if (confirmClear === target) {
       haptic("warning");
       setConfirmClear(null);
       (target === "chat"
         ? Promise.all([db.chat.clear(), db.conversations.clear()])
-        : db.journal.clear()
+        : target === "notes"
+          ? db.journal.clear()
+          : db.memories.clear()
       ).then(() => {
         setCleared(target);
         setTimeout(() => setCleared(null), 2000);
@@ -112,6 +125,13 @@ export default function Settings({
     haptic("tap");
     setConfirmClear(target);
     setTimeout(() => setConfirmClear((cur) => (cur === target ? null : cur)), 4000);
+  }
+
+  function handleToggleMemory() {
+    haptic("tap");
+    const next = !memoryOn;
+    setMemoryOn(next);
+    setMemoryEnabled(next);
   }
 
   return (
@@ -161,6 +181,83 @@ export default function Settings({
               }
             />
           ))}
+        </SectionCard>
+
+        <SectionCard title="Memory">
+          <Row
+            label="Remember details about you"
+            description="Navo notes durable facts you mention, like your name or what you're studying, and recalls them in later chats. Everything stays on this device."
+            action={
+              <button
+                type="button"
+                role="switch"
+                aria-checked={memoryOn}
+                onClick={handleToggleMemory}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  memoryOn ? "bg-accent" : "bg-border"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                    memoryOn ? "translate-x-[22px]" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            }
+          />
+          {(memories ?? []).length > 0 ? (
+            <>
+              {(memories ?? []).map((m) => (
+                <Row
+                  key={m.id}
+                  label={m.text}
+                  action={
+                    <button
+                      type="button"
+                      aria-label="Forget this"
+                      title="Forget this"
+                      className="rounded-full border border-border px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-red-500/40 hover:text-red-500"
+                      onClick={() => {
+                        haptic("tap");
+                        db.memories.delete(m.id);
+                      }}
+                    >
+                      Forget
+                    </button>
+                  }
+                />
+              ))}
+              <Row
+                label="Clear everything Navo remembers"
+                description="Deletes all learned memories. This can't be undone."
+                action={
+                  <button
+                    type="button"
+                    className={`${DANGER_BUTTON} ${
+                      confirmClear === "memories" ? DANGER_BUTTON_CONFIRM : DANGER_BUTTON_IDLE
+                    }`}
+                    onClick={() => handleClearClick("memories")}
+                  >
+                    {cleared === "memories"
+                      ? "Cleared"
+                      : confirmClear === "memories"
+                        ? "Tap to confirm"
+                        : "Clear"}
+                  </button>
+                }
+              />
+            </>
+          ) : (
+            <Row
+              label="Nothing remembered yet"
+              description={
+                memoryOn
+                  ? "As you chat, facts you mention will show up here for you to review or remove."
+                  : "Memory is off, so Navo won't note anything about you."
+              }
+              action={null}
+            />
+          )}
         </SectionCard>
 
         <SectionCard title="Data">

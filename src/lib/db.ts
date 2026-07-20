@@ -22,10 +22,19 @@ export interface ChatMessage {
   createdAt: number;
 }
 
+/** A durable fact Navo learned about the user from conversation, kept fully on device. */
+export interface Memory {
+  id: number;
+  text: string;
+  createdAt: number;
+  embedding?: number[];
+}
+
 const db = new Dexie("offline-llm-app") as Dexie & {
   journal: EntityTable<JournalEntry, "id">;
   chat: EntityTable<ChatMessage, "id">;
   conversations: EntityTable<Conversation, "id">;
+  memories: EntityTable<Memory, "id">;
 };
 
 db.version(1).stores({
@@ -58,5 +67,12 @@ db.version(2)
       existing.map((m) => chatTable.update(m.id, { conversationId }))
     );
   });
+
+db.version(3).stores({
+  journal: "++id, createdAt",
+  chat: "++id, conversationId, createdAt",
+  conversations: "++id, updatedAt",
+  memories: "++id, createdAt",
+});
 
 export { db };

@@ -1,0 +1,111 @@
+import { db, type Memory } from "./db";
+import { cosineSimilarity, embed } from "./embeddings";
+
+/** Cap on stored memories; the oldest is dropped when a new one would exceed it. */
+export const MAX_MEMORIES = 100;
+/** A new memory this close to an existing one is treated as a duplicate and skipped. */
+const DEDUP_THRESHOLD = 0.9;
+/** Memories below this similarity to the query are not recalled. Matches the
+ *  proven notes threshold in retrieval.ts so recall behaves the same as notes. */
+const RETRIEVAL_THRESHOLD = 0.3;
+const MEMORY_SETTING_KEY = "navo-memory";
+
+/** Sentences that mention these are too fleeting to store as durable facts. */
+const TRANSIENT_RE =
+  /\b(today|tonight|right now|currently|at the moment|this (morning|afternoon|evening|week|weekend)|for (the|my|this) (exam|test|quiz|assignment|homework)|for now|just now)\b/i;
+/** A sentence with a negation is skipped so "I'm not studying biology" isn't stored as a fact. */
+const NEGATION_RE = /\b(not|never|no longer|isn't|aren't|wasn't|weren't|don't|doesn't|didn't|won't)\b|n't\b/i;
+
+interface Pattern {
+  re: RegExp;
+  format: (match: RegExpMatchArray) => string;
+}
+
+/** Conservative patterns over the user's own words. Low recall on purpose: every
+ *  captured memory should be a durable, user-stated fact, not a guess. */
+const PATTERNS: Pattern[] = [
+  { re: /\bmy name is\s+([\p{L}][\p{L}'-]{1,30})\b/iu, format: (m) => `The user's name is ${clean(m[1])}.` },
+  { re: /\bcall me\s+([\p{L}][\p{L}'-]{1,30})\b/iu, format: (m) => `The user goes by ${clean(m[1])}.` },
+  { re: /\bi(?:'m| am)\s+studying\s+([^.,!?\n]{2,40})/i, format: (m) => `The user is studying ${clean(m[1])}.` },
+  { re: /\bi(?:'m| am)\s+learning\s+([^.,!?\n]{2,40})/i, format: (m) => `The user is learning ${clean(m[1])}.` },
+  { re: /\bi\s+work\s+(?:as|at|in)\s+([^.,!?\n]{2,40})/i, format: (m) => `The user works ${clean(m[0].replace(/^i\s+work\s+/i, ""))}.` },
+  { re: /\bi\s+prefer\s+([^.,!?\n]{2,40})/i, format: (m) => `The user prefers ${clean(m[1])}.` },
+  { re: /\bi(?:'m| am)\s+(?:based|located)\s+in\s+([^.,!?\n]{2,40})/i, format: (m) => `The user is based in ${clean(m[1])}.` },
+];
+
+function clean(text: string): string {
+  return text.trim().replace(/\s+/g, " ").replace(/[.,;:!?]+$/, "").slice(0, 80);
+}
+
+/** Pull durable, user-stated facts out of a single user message. Pure and deterministic. */
+export function extractMemories(userText: string): string[] {
+  const facts: string[] = [];
+  const sentences = userText.split(/(?<=[.!?\n])\s+/);
+  for (const sentence of sentences) {
+    if (NEGATION_RE.test(sentence) || TRANSIENT_RE.test(sentence)) continue;
+    for (const pattern of PATTERNS) {
+      const match = sentence.match(pattern.re);
+      if (!match) continue;
+      const fact = pattern.format(match).trim();
+      if (fact.length > 3 && !facts.includes(fact)) facts.push(fact);
+    }
+  }
+  return facts;
+}
+
+/** Format recalled memories for injection into the prompt, mirroring the notes block. */
+export function buildMemoriesBlock(memories: string[]): string {
+  if (memories.length === 0) return "";
+  return `What you already know about the user:\n${memories.map((m) => `- ${m}`).join("\n")}\n\n`;
+}
+
+export function isMemoryEnabled(): boolean {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(MEMORY_SETTING_KEY) !== "off";
+}
+
+export function setMemoryEnabled(on: boolean): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(MEMORY_SETTING_KEY, on ? "on" : "off");
+}
+
+/** Extract, embed, dedupe, and store any new memories from a user message. Meant to
+ *  run after the reply streams, never on the path to the first token. */
+export async function saveExtractedMemories(userText: string): Promise<void> {
+  const facts = extractMemories(userText);
+  if (facts.length === 0) return;
+
+  const existing = await db.memories.toArray();
+  for (const fact of facts) {
+    const embedding = await embed(fact);
+    const isDuplicate = existing.some(
+      (m) => m.embedding && cosineSimilarity(embedding, m.embedding) > DEDUP_THRESHOLD
+    );
+    if (isDuplicate) continue;
+
+    while (existing.length >= MAX_MEMORIES) {
+      const oldest = existing.reduce((a, b) => (a.createdAt <= b.createdAt ? a : b));
+      await db.memories.delete(oldest.id);
+      existing.splice(existing.indexOf(oldest), 1);
+    }
+
+    const createdAt = Date.now();
+    const id = await db.memories.add({ text: fact, embedding, createdAt });
+    existing.push({ id, text: fact, embedding, createdAt } as Memory);
+  }
+}
+
+/** Recall the memories most relevant to the query, highest similarity first. */
+export async function topRelevantMemories(query: string, k = 3): Promise<string[]> {
+  const memories = await db.memories.toArray();
+  if (memories.length === 0) return [];
+
+  const queryEmbedding = await embed(query);
+  return memories
+    .filter((m): m is Memory & { embedding: number[] } => Array.isArray(m.embedding))
+    .map((m) => ({ text: m.text, score: cosineSimilarity(queryEmbedding, m.embedding) }))
+    .filter((m) => m.score > RETRIEVAL_THRESHOLD)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, k)
+    .map((m) => m.text);
+}
