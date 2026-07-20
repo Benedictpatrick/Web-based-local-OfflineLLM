@@ -16,7 +16,7 @@ import {
   getLoadedContextSize,
   isAbortError,
   isEngineLostError,
-  isStoragePersisted,
+  requestPersistentStorage,
   isWasmSupported,
   loadEngine,
   streamChat,
@@ -266,6 +266,10 @@ export default function Chat({
     setShowStatusDetail(false);
     if (statusDetailTimeoutRef.current) clearTimeout(statusDetailTimeoutRef.current);
 
+    // Request durable storage before the download so the eviction warning is
+    // shown while the model is downloading, not after it has already landed.
+    setStoragePersisted(await requestPersistentStorage());
+
     for (let attempt = 0; attempt <= MAX_LOAD_RETRIES; attempt++) {
       const startedAt = performance.now();
       let sawPartialProgress = false;
@@ -283,16 +287,10 @@ export default function Chat({
           setProgressPct(total > 0 ? pct : null);
         });
         const seconds = ((performance.now() - startedAt) / 1000).toFixed(1);
-        const persisted = await isStoragePersisted();
-        setStoragePersisted(persisted);
-        const persistNote =
-          persisted === false
-            ? ". Storage isn't marked durable yet; install this app to your home screen to stop it being evicted between visits"
-            : "";
         setProgress(
-          (sawPartialProgress
+          sawPartialProgress
             ? `Downloaded and loaded in ${seconds}s`
-            : `Loaded from local cache in ${seconds}s (no download needed)`) + persistNote
+            : `Loaded from local cache in ${seconds}s (no download needed)`
         );
         setHasLoadedOnce(true);
         setStatus("ready");
@@ -707,6 +705,7 @@ export default function Chat({
         status={status}
         progress={progress}
         progressPct={progressPct}
+        storagePersisted={storagePersisted}
         modelLabel={AVAILABLE_MODELS.find((m) => m.id === modelId)?.label ?? modelId}
         errorText={errorText}
         onRetry={() => handleLoadModel(modelId)}

@@ -102,12 +102,19 @@ async function hasWebGpu(): Promise<boolean> {
   return webGpuAvailablePromise;
 }
 
-export async function isStoragePersisted(): Promise<boolean | null> {
-  if (typeof navigator === "undefined" || !navigator.storage?.persisted) {
+/**
+ * Asks the browser to keep this origin's storage durable so the cached model
+ * weights are not evicted between visits, and returns the resulting state.
+ * On Chrome this is decided by engagement heuristics with no prompt; on Firefox
+ * it may prompt. Already-granted storage resolves true without re-prompting.
+ * Returns null when the API is unavailable.
+ */
+export async function requestPersistentStorage(): Promise<boolean | null> {
+  if (typeof navigator === "undefined" || !navigator.storage?.persist) {
     return null;
   }
   try {
-    return await navigator.storage.persisted();
+    return await navigator.storage.persist();
   } catch {
     return null;
   }
@@ -119,10 +126,6 @@ export async function loadEngine(
 ): Promise<void> {
   const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
   if (!model) throw new Error(`Unknown model: ${modelId}`);
-
-  if (typeof navigator !== "undefined" && navigator.storage?.persist) {
-    navigator.storage.persist().catch(() => {});
-  }
 
   if (engineKind === null) {
     engineKind = (await hasWebGpu()) ? "webgpu" : "wasm";

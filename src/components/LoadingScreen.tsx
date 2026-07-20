@@ -6,6 +6,7 @@ export default function LoadingScreen({
   status,
   progress,
   progressPct,
+  storagePersisted,
   modelLabel,
   errorText,
   onRetry,
@@ -14,6 +15,7 @@ export default function LoadingScreen({
   status: "idle" | "loading" | "error";
   progress: string;
   progressPct: number | null;
+  storagePersisted: boolean | null;
   modelLabel: string;
   errorText: string;
   onRetry: () => void;
@@ -80,6 +82,13 @@ export default function LoadingScreen({
             First load needs internet to download the model. After that it
             works fully offline.
           </p>
+          {storagePersisted === false && (
+            <p className="max-w-xs rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+              This browser hasn&apos;t granted durable storage, so the model may
+              be evicted and re-downloaded on a future visit. Install Navo to
+              your home screen to keep it saved.
+            </p>
+          )}
         </div>
       )}
     </div>
