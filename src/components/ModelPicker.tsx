@@ -14,11 +14,15 @@ export default function ModelPicker({
   onChange,
   disabled,
   onModelDeleted,
+  variant = "default",
 }: {
   value: ModelId;
   onChange: (id: ModelId) => void;
   disabled?: boolean;
   onModelDeleted?: (id: ModelId) => void;
+  /** "chip" renders a compact pill trigger (sparkle + label) for the chat
+   *  header, instead of the full-width bordered box used elsewhere. */
+  variant?: "default" | "chip";
 }) {
   const [open, setOpen] = useState(false);
   const [cached, setCached] = useState<Partial<Record<ModelId, boolean>>>({});
@@ -71,37 +75,77 @@ export default function ModelPicker({
   }
 
   return (
-    <div ref={rootRef} className="relative min-w-0 flex-1">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover disabled:opacity-50"
-        onClick={() => setOpen((o) => !o)}
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        <span className="truncate">{selected?.label}</span>
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          className={`shrink-0 text-foreground-muted transition-transform ${open ? "rotate-180" : ""}`}
+    <div ref={rootRef} className={variant === "chip" ? "relative min-w-0" : "relative min-w-0 flex-1"}>
+      {variant === "chip" ? (
+        <button
+          type="button"
+          className="glass-chip flex min-w-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors hover:text-foreground disabled:opacity-50"
+          onClick={() => setOpen((o) => !o)}
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
         >
-          <path
-            d="M6 9l6 6 6-6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className="shrink-0 animate-pulse text-accent"
+            aria-hidden="true"
+          >
+            <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" />
+          </svg>
+          <span className="truncate">{selected?.label}</span>
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          >
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover disabled:opacity-50"
+          onClick={() => setOpen((o) => !o)}
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+        >
+          <span className="truncate">{selected?.label}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            className={`shrink-0 text-foreground-muted transition-transform ${open ? "rotate-180" : ""}`}
+          >
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      )}
 
       {open && (
         <div
           role="listbox"
-          className="absolute top-full z-10 mt-2 w-full overflow-hidden rounded-2xl border border-border bg-background py-1.5 shadow-lg"
+          className={`absolute top-full z-10 mt-2 overflow-hidden rounded-2xl border border-border bg-background py-1.5 shadow-lg ${
+            variant === "chip" ? "w-64 max-w-[80vw]" : "w-full"
+          }`}
         >
           {AVAILABLE_MODELS.map((m) => (
             <div

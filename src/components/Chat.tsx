@@ -734,33 +734,18 @@ export default function Chat({
     <div className="flex h-full flex-col">
       <div className="px-3 py-2 text-xs text-foreground-muted sm:px-5">
         <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            className="glass-chip flex min-w-0 items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors hover:text-foreground disabled:opacity-50"
-            onClick={() => setChangingModel(true)}
+          <ModelPicker
+            variant="chip"
+            value={modelId}
             disabled={streaming}
-          >
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="shrink-0 animate-pulse text-accent"
-              aria-hidden="true"
-            >
-              <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" />
-            </svg>
-            <span className="truncate">{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="shrink-0">
-              <path
-                d="M6 9l6 6 6-6"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
+            onChange={(id) => {
+              setModelId(id);
+              handleLoadModel(id);
+            }}
+            onModelDeleted={(id) => {
+              if (id === modelId) setProgress("");
+            }}
+          />
           <button
             type="button"
             className={`glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
