@@ -6,14 +6,21 @@
 
 ### *A Private, Local-First AI Assistant Operating 100% In Your Browser on Desktop & Mobile*
 
-[![Live Demo](https://img.shields.io/badge/Demo-Try%20Live%20Now-success?style=for-the-badge&logo=vercel&logoColor=white&color=00c853)](https://offline-companion-benedictpatrickjohn-9567s-projects.vercel.app)
+## 🌐 [**navoai.space**](https://navoai.space)
+
+### [**→ Try Navo AI live, right now, free, no signup →**](https://navoai.space)
+
+[![Live Site](https://img.shields.io/badge/🌐%20Live%20Site-navoai.space-77F62B?style=for-the-badge)](https://navoai.space)
+[![GitHub Stars](https://img.shields.io/github/stars/Benedictpatrick/Web-based-local-OfflineLLM?style=for-the-badge&color=yellow&label=Stars)](https://github.com/Benedictpatrick/Web-based-local-OfflineLLM/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Framework-Next.js%2015-black?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-blue?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![PWA](https://img.shields.io/badge/PWA-Installable-ff69b4?style=for-the-badge&logo=progressive-web-apps&logoColor=white)](#features)
 
+**⭐ If Navo AI is useful to you, please star this repo, it genuinely helps people find the project.**
+
 <p align="center">
-  <a href="https://offline-companion-benedictpatrickjohn-9567s-projects.vercel.app"><b>Try it now →</b></a>
+  <a href="https://navoai.space"><b>Try it now →</b></a>
   •
   <a href="#getting-started"><b>Quick Start</b></a>
   •
@@ -230,3 +237,13 @@ Contributions make the open-source community an amazing place to learn, inspire,
 ## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
+
+---
+
+<div align="center">
+
+### 🌐 Try Navo AI now at **[navoai.space](https://navoai.space)**
+
+If this project was useful to you, a ⭐ on the repo goes a long way.
+
+</div>
