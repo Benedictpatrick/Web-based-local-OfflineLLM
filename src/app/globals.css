@@ -150,8 +150,15 @@ body {
   border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
-.glass-chip {
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+.glass-panel {
+  background: color-mix(in srgb, var(--background) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.glass-chip,
+.glass-sheen {
   backdrop-filter: blur(10px) url(#tab-glass) saturate(160%);
   -webkit-backdrop-filter: blur(10px) saturate(160%);
   box-shadow:
@@ -162,6 +169,13 @@ body {
   transition:
     background-color 200ms,
     box-shadow 200ms;
+}
+
+/* .glass-chip additionally carries its own neutral tint; .glass-sheen leaves
+ * background to a Tailwind bg-* utility, for buttons with a colored
+ * active/pressed state. */
+.glass-chip {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .glass-chip:hover {

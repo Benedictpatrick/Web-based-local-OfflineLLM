@@ -736,11 +736,20 @@ export default function Chat({
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
-            className="glass-chip flex min-w-0 items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors hover:text-foreground disabled:opacity-50"
+            className="glass-chip flex min-w-0 items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors hover:text-foreground disabled:opacity-50"
             onClick={() => setChangingModel(true)}
             disabled={streaming}
           >
-            <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="shrink-0 animate-pulse text-accent"
+              aria-hidden="true"
+            >
+              <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" />
+            </svg>
             <span className="truncate">{AVAILABLE_MODELS.find((m) => m.id === modelId)?.label}</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="shrink-0">
               <path
@@ -754,7 +763,7 @@ export default function Chat({
           </button>
           <button
             type="button"
-            className={`glass-chip flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
+            className={`glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
             onClick={() => setShowStats((v) => !v)}
             aria-expanded={showStats}
           >
@@ -966,7 +975,7 @@ export default function Chat({
               )}
             </div>
           )}
-          <div className="flex flex-col gap-1 rounded-3xl border border-border bg-surface px-3 pb-2 pt-3 shadow-sm">
+          <div className="glass-panel flex flex-col gap-1 rounded-3xl px-3 pb-2 pt-3 shadow-sm">
             <input
               ref={fileInputRef}
               type="file"
@@ -997,7 +1006,7 @@ export default function Chat({
               <div className="flex items-center gap-1">
                 <button
                   aria-label="Attach a file"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-background hover:text-foreground disabled:opacity-30 sm:h-9 sm:w-9"
+                  className="glass-chip flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground disabled:opacity-30 sm:h-9 sm:w-9"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={streaming || attachingFile}
                 >
@@ -1018,8 +1027,8 @@ export default function Chat({
                   title="Let the assistant run Python automatically to compute exact answers"
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 sm:h-9 sm:w-9 ${
                     agentMode
-                      ? "bg-accent text-accent-foreground"
-                      : "text-foreground-muted hover:bg-background hover:text-foreground"
+                      ? "glass-sheen bg-accent text-accent-foreground"
+                      : "glass-chip text-foreground-muted hover:text-foreground"
                   }`}
                   onClick={() => setAgentMode((v) => !v)}
                   disabled={streaming}
@@ -1042,8 +1051,8 @@ export default function Chat({
                   title="Speak instead of typing. Transcribed on your device, audio never leaves your browser. First use downloads a ~150MB speech model."
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 sm:h-9 sm:w-9 ${
                     micState === "recording"
-                      ? "bg-red-500 text-white"
-                      : "text-foreground-muted hover:bg-background hover:text-foreground"
+                      ? "glass-sheen bg-red-500 text-white"
+                      : "glass-chip text-foreground-muted hover:text-foreground"
                   }`}
                   onClick={handleMicClick}
                   disabled={streaming || micState === "transcribing"}
@@ -1067,7 +1076,7 @@ export default function Chat({
                 </button>
                 <button
                   aria-label={streaming ? "Stop" : "Send"}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-30 sm:h-9 sm:w-9"
+                  className="glass-sheen flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-30 sm:h-9 sm:w-9"
                   onClick={streaming ? handleStop : handleSend}
                   disabled={!streaming && !input.trim()}
                 >
