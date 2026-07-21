@@ -708,7 +708,7 @@ export default function Chat({
               </p>
             ) : null;
           })()}
-        <div className="flex w-full max-w-xs items-center gap-2">
+        <div className="flex max-w-xs items-center gap-2">
           <ModelPicker
             value={modelId}
             onChange={(id) => {

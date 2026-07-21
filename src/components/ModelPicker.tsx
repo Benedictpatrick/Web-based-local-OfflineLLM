@@ -87,7 +87,7 @@ export default function ModelPicker({
   }
 
   return (
-    <div ref={rootRef} className={variant === "chip" ? "relative min-w-0" : "relative min-w-0 flex-1"}>
+    <div ref={rootRef} className="relative min-w-0">
       {variant === "chip" ? (
         <button
           type="button"
@@ -118,7 +118,7 @@ export default function ModelPicker({
       ) : (
         <button
           type="button"
-          className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover disabled:opacity-50"
+          className="flex items-center justify-between gap-4 rounded-xl border border-border bg-surface px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover disabled:opacity-50"
           onClick={() => setOpen((o) => !o)}
           disabled={disabled}
           aria-haspopup="listbox"
@@ -154,98 +154,90 @@ export default function ModelPicker({
       )}
 
       {open && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/40 sm:hidden"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <div
-            role="listbox"
-            className={`fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-y-auto rounded-t-2xl border-t border-border bg-background pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-lg sm:absolute sm:inset-x-auto sm:bottom-auto sm:top-full sm:z-10 sm:mt-2 sm:max-h-[60vh] sm:rounded-2xl sm:border sm:pb-1.5 ${
-              variant === "chip" ? "sm:w-64 sm:max-w-[80vw]" : "sm:w-full"
-            }`}
-          >
-            <div className="mx-auto mb-1 h-1 w-10 shrink-0 rounded-full bg-border sm:hidden" />
-            {listedModels.map((m) => {
-              const { name, meta } = modelDisplayParts(m);
-              return (
-                <div
-                  key={m.id}
-                  role="option"
-                  aria-selected={m.id === value}
-                  className={`group flex w-full items-center justify-between gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-surface ${
-                    m.id === value ? "text-foreground" : "text-foreground-muted"
-                  }`}
+        <div
+          role="listbox"
+          className={`absolute top-full z-10 mt-2 max-h-[13.5rem] overflow-y-auto rounded-2xl border border-border bg-background py-1.5 shadow-lg ${
+            variant === "chip" ? "w-64 max-w-[80vw]" : "w-72 max-w-[80vw]"
+          }`}
+        >
+          {listedModels.map((m) => {
+            const { name, meta } = modelDisplayParts(m);
+            return (
+              <div
+                key={m.id}
+                role="option"
+                aria-selected={m.id === value}
+                className={`group flex w-full items-center justify-between gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-surface ${
+                  m.id === value ? "text-foreground" : "text-foreground-muted"
+                }`}
+              >
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  onClick={() => {
+                    haptic("tap");
+                    onChange(m.id);
+                    setOpen(false);
+                  }}
                 >
+                  <BrandMark provider={m.provider} size={14} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{name}</span>
+                    {meta && (
+                      <span className="block truncate text-xs text-foreground-muted/70">{meta}</span>
+                    )}
+                  </span>
+                  {m.id === value && (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="shrink-0 text-accent">
+                      <path
+                        d="M20 6L9 17l-5-5"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+                {cached[m.id] && (
                   <button
                     type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                    onClick={() => {
-                      haptic("tap");
-                      onChange(m.id);
-                      setOpen(false);
+                    aria-label={`Delete downloaded ${m.label}`}
+                    className="shrink-0 rounded-md p-1 text-foreground-muted transition-colors hover:text-red-500 disabled:opacity-50"
+                    disabled={deletingId === m.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(m.id, m.label);
                     }}
                   >
-                    <BrandMark provider={m.provider} size={14} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">{name}</span>
-                      {meta && (
-                        <span className="block truncate text-xs text-foreground-muted/70">{meta}</span>
-                      )}
-                    </span>
-                    {m.id === value && (
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" className="shrink-0 text-accent">
-                        <path
-                          d="M20 6L9 17l-5-5"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </button>
-                  {cached[m.id] && (
-                    <button
-                      type="button"
-                      aria-label={`Delete downloaded ${m.label}`}
-                      className="shrink-0 rounded-md p-1 text-foreground-muted transition-colors hover:text-red-500 disabled:opacity-50"
-                      disabled={deletingId === m.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(m.id, m.label);
-                      }}
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            {onBrowseMore && (
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-left text-sm text-accent transition-colors hover:bg-surface"
-                onClick={() => {
-                  haptic("tap");
-                  setOpen(false);
-                  onBrowseMore();
-                }}
-              >
-                Browse more in Model Hub
-              </button>
-            )}
-          </div>
-        </>
+                )}
+              </div>
+            );
+          })}
+          {onBrowseMore && (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-left text-sm text-accent transition-colors hover:bg-surface"
+              onClick={() => {
+                haptic("tap");
+                setOpen(false);
+                onBrowseMore();
+              }}
+            >
+              Browse more in Model Hub
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
