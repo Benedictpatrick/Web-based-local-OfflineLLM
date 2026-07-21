@@ -1,0 +1,26 @@
+# Navo AI
+
+> Navo AI is a private, offline AI assistant that runs entirely on the user's device, inside the browser, using WebGPU (or a WASM fallback on unsupported devices). Nothing typed into Navo AI ever leaves the browser, and it keeps working without an internet connection once a model is downloaded.
+
+Navo AI was founded by Benedict Patrick and Saidharshan. It is free to use, requires no signup, and runs no server-side inference at all: every model download and every chat response happens on the user's own hardware.
+
+## What Navo AI does
+
+- Chats with the user using open language models such as Llama, Gemma, Qwen, Phi, Mistral, SmolLM2, and DeepSeek, downloaded and run locally in the browser.
+- Runs Python code directly in the browser.
+- Remembers durable facts the user shares (name, what they're studying) and recalls them in later chats, entirely on-device.
+- Lets the user save short notes and text snippets that get pulled into chat when relevant.
+- Offers a Model Hub to browse, download, and switch between many open models, organized by maker (Meta, Google, Alibaba's Qwen, Microsoft, Mistral AI, Hugging Face, DeepSeek).
+- Can be installed to a phone or desktop home screen as a Progressive Web App for offline use.
+
+## Key facts
+
+- Founders: Benedict Patrick and Saidharshan.
+- Price: free, no signup required.
+- Privacy: no data is sent to any server; all inference happens on-device in the browser.
+- Requirements: a modern browser; WebGPU is used when available, with a WASM fallback for devices without it.
+
+## Links
+
+- [Navo AI](https://navoai.space): the live application.
+- [Source code on GitHub](https://github.com/Benedictpatrick/Web-based-local-OfflineLLM): the full open source repository.

@@ -521,6 +521,19 @@ export default function Settings({
           />
           <Row label="Founders" action={<span className="text-sm text-foreground-muted">{AUTHOR_NAME}</span>} />
           <Row
+            label="FAQ"
+            action={
+              <a
+                href="/about"
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-accent hover:underline"
+              >
+                About & FAQ
+              </a>
+            }
+          />
+          <Row
             label="Source code"
             action={
               <a
