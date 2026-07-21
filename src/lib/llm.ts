@@ -6,7 +6,22 @@ import type { MLCEngine } from "@mlc-ai/web-llm";
 
 const HF_BASE = "https://huggingface.co";
 
-export const AVAILABLE_MODELS = [
+export interface ModelEntry {
+  id: string;
+  label: string;
+  /** MLC-format id used by the WebGPU (web-llm) engine. Always required. */
+  mlcId: string;
+  /** GGUF repo/file used by the WASM (wllama) fallback engine. Models without
+   *  these only run on WebGPU — see webgpuOnly. */
+  repo?: string;
+  file?: string;
+  /** One-line blurb shown in the Model Hub browsing UI. */
+  hubDescription?: string;
+}
+
+/** The original 3 models: hand-verified on both WebGPU and WASM, and the
+ *  only ones offered before a device has picked a model at all. */
+export const AVAILABLE_MODELS: ModelEntry[] = [
   {
     id: "llama3.2-1b",
     label: "Llama 3.2 1B (fastest, ~0.7GB)",
@@ -28,9 +43,110 @@ export const AVAILABLE_MODELS = [
     file: "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
     mlcId: "Llama-3.2-3B-Instruct-q4f16_1-MLC",
   },
-] as const;
+  // Model Hub additions below. WebGPU-only: mlcId values are copied verbatim
+  // from @mlc-ai/web-llm's own prebuiltAppConfig.model_list, which is the
+  // authoritative, tested catalog for that engine. None have a matching
+  // hand-verified GGUF file, so they're skipped entirely on WASM-only
+  // devices (see webgpuOnly() below) rather than risk a broken download.
+  {
+    id: "llama3.1-8b",
+    label: "Llama 3.1 8B (powerful, ~4.9GB)",
+    mlcId: "Llama-3.1-8B-Instruct-q4f16_1-MLC",
+    hubDescription: "Meta's larger general-purpose model. Strong all-rounder if your device can take it.",
+  },
+  {
+    id: "qwen2.5-7b",
+    label: "Qwen 2.5 7B (powerful, ~5GB)",
+    mlcId: "Qwen2.5-7B-Instruct-q4f16_1-MLC",
+    hubDescription: "Alibaba's flagship small model. Excellent general reasoning and writing.",
+  },
+  {
+    id: "qwen2.5-3b",
+    label: "Qwen 2.5 3B (balanced, ~2.4GB)",
+    mlcId: "Qwen2.5-3B-Instruct-q4f16_1-MLC",
+    hubDescription: "A lighter Qwen 2.5, good middle ground between speed and quality.",
+  },
+  {
+    id: "qwen2.5-0.5b",
+    label: "Qwen 2.5 0.5B (tiny, ~0.9GB)",
+    mlcId: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
+    hubDescription: "Very small and fast. Best for quick, simple questions on weaker devices.",
+  },
+  {
+    id: "qwen2.5-coder-7b",
+    label: "Qwen 2.5 Coder 7B (coding, ~5GB)",
+    mlcId: "Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC",
+    hubDescription: "Tuned specifically for code generation and debugging.",
+  },
+  {
+    id: "qwen2.5-math-1.5b",
+    label: "Qwen 2.5 Math 1.5B (math, ~1.6GB)",
+    mlcId: "Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC",
+    hubDescription: "Tuned specifically for math problem solving and step-by-step reasoning.",
+  },
+  {
+    id: "phi-3.5-mini",
+    label: "Phi 3.5 Mini (balanced, ~3.6GB)",
+    mlcId: "Phi-3.5-mini-instruct-q4f16_1-MLC",
+    hubDescription: "Microsoft's efficient mid-size model, strong for its footprint.",
+  },
+  {
+    id: "phi-4-mini",
+    label: "Phi 4 Mini (powerful, ~3.4GB)",
+    mlcId: "Phi-4-mini-instruct-q4f16_1-MLC",
+    hubDescription: "Microsoft's newest small model. Better reasoning than Phi 3.5 at a similar size.",
+  },
+  {
+    id: "mistral-7b-v0.3",
+    label: "Mistral 7B v0.3 (powerful, ~4.5GB)",
+    mlcId: "Mistral-7B-Instruct-v0.3-q4f16_1-MLC",
+    hubDescription: "A long-standing, well-rounded open model.",
+  },
+  {
+    id: "gemma2-9b",
+    label: "Gemma 2 9B (powerful, ~6.3GB)",
+    mlcId: "gemma-2-9b-it-q4f16_1-MLC",
+    hubDescription: "Google's larger Gemma 2. Needs a capable GPU but gives noticeably better answers.",
+  },
+  {
+    id: "gemma3-1b",
+    label: "Gemma 3 1B (tiny, ~0.7GB)",
+    mlcId: "gemma3-1b-it-q4f16_1-MLC",
+    hubDescription: "Google's newest generation at a very small size.",
+  },
+  {
+    id: "smollm2-1.7b",
+    label: "SmolLM2 1.7B (fast, ~1.7GB)",
+    mlcId: "SmolLM2-1.7B-Instruct-q4f16_1-MLC",
+    hubDescription: "Hugging Face's compact model, built to punch above its size.",
+  },
+  {
+    id: "smollm2-360m",
+    label: "SmolLM2 360M (tiny, ~0.4GB)",
+    mlcId: "SmolLM2-360M-Instruct-q4f16_1-MLC",
+    hubDescription: "Extremely small and fast. Best for simple tasks on low-power devices.",
+  },
+  {
+    id: "deepseek-r1-qwen-7b",
+    label: "DeepSeek R1 Distill Qwen 7B (reasoning, ~5GB)",
+    mlcId: "DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC",
+    hubDescription: "Distilled from DeepSeek R1, shows its step-by-step reasoning before answering.",
+  },
+  {
+    id: "qwen3-4b",
+    label: "Qwen 3 4B (balanced, ~3.4GB)",
+    mlcId: "Qwen3-4B-q4f16_1-MLC",
+    hubDescription: "The latest Qwen generation at a mid-range size.",
+  },
+];
 
 export type ModelId = (typeof AVAILABLE_MODELS)[number]["id"];
+
+/** True for Model Hub entries with no verified WASM fallback — these only
+ *  run on WebGPU and are hidden on WASM-only devices. */
+export function isWebgpuOnly(model: Pick<ModelEntry, "repo" | "file">): boolean {
+  return !model.repo || !model.file;
+}
 export type ProgressInfo = { loaded: number; total: number; text?: string };
 
 export type GenerationStats = {
@@ -86,7 +202,7 @@ export async function getDefaultModelId(): Promise<ModelId> {
   return (await hasWebGpu()) ? "llama3.2-3b" : "llama3.2-1b";
 }
 
-async function hasWebGpu(): Promise<boolean> {
+export async function hasWebGpu(): Promise<boolean> {
   if (webGpuAvailablePromise) return webGpuAvailablePromise;
   webGpuAvailablePromise = (async () => {
     if (typeof navigator === "undefined" || !("gpu" in navigator)) return false;
@@ -142,6 +258,10 @@ export async function loadEngine(
     }
   }
 
+  if (isWebgpuOnly(model)) {
+    throw new Error(`${model.label} requires WebGPU, which isn't available on this device.`);
+  }
+
   await loadWasmEngine(model, onProgress);
   loadedModelId = modelId;
 }
@@ -184,6 +304,12 @@ async function loadWasmEngine(
   model: (typeof AVAILABLE_MODELS)[number],
   onProgress?: (progress: ProgressInfo) => void
 ): Promise<Wllama> {
+  // Callers must check isWebgpuOnly() first; loadEngine() already does.
+  if (!model.repo || !model.file) {
+    throw new Error(`${model.label} has no WASM fallback and requires WebGPU.`);
+  }
+  const { repo, file } = model;
+
   if (wllama && loadedModelId === model.id) {
     return wllama;
   }
@@ -220,14 +346,14 @@ async function loadWasmEngine(
 
     try {
       try {
-        await instance.loadModelFromHF({ repo: model.repo, file: model.file }, loadParams);
+        await instance.loadModelFromHF({ repo, file }, loadParams);
       } catch (err) {
         const isStaleCacheError =
           err instanceof Error && /model file not found/i.test(err.message);
         if (!isStaleCacheError) throw err;
 
         await instance.cacheManager.clear().catch(() => {});
-        await instance.loadModelFromHF({ repo: model.repo, file: model.file }, loadParams);
+        await instance.loadModelFromHF({ repo, file }, loadParams);
       }
 
       wllama = instance;
@@ -253,12 +379,14 @@ export async function isModelCached(modelId: ModelId): Promise<boolean> {
   const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
   if (!model) return false;
 
-  const wllamaCached = await importWllama()
-    .then(({ CacheManager }) =>
-      new CacheManager().getSize(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
-    )
-    .then((size) => size > 0)
-    .catch(() => false);
+  const wllamaCached = model.repo && model.file
+    ? await importWllama()
+        .then(({ CacheManager }) =>
+          new CacheManager().getSize(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
+        )
+        .then((size) => size > 0)
+        .catch(() => false)
+    : false;
   if (wllamaCached) return true;
 
   try {
@@ -285,11 +413,13 @@ export async function deleteModelCache(modelId: ModelId): Promise<void> {
     loadedModelId = null;
   }
 
-  await importWllama()
-    .then(({ CacheManager }) =>
-      new CacheManager().delete(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
-    )
-    .catch(() => {});
+  if (model.repo && model.file) {
+    await importWllama()
+      .then(({ CacheManager }) =>
+        new CacheManager().delete(`${HF_BASE}/${model.repo}/resolve/main/${model.file}`)
+      )
+      .catch(() => {});
+  }
 
   try {
     const webllm = await import("@mlc-ai/web-llm");

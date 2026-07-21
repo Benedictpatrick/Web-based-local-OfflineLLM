@@ -158,6 +158,7 @@ const MAX_LOAD_RETRIES = 2;
 
 export interface ChatHandle {
   openModelPicker: () => void;
+  loadModel: (id: ModelId) => void;
 }
 
 export default function Chat({
@@ -246,6 +247,11 @@ export default function Chat({
 
   useImperativeHandle(ref, () => ({
     openModelPicker: () => setChangingModel(true),
+    loadModel: (id: ModelId) => {
+      setChangingModel(false);
+      setModelId(id);
+      handleLoadModel(id);
+    },
   }));
 
 

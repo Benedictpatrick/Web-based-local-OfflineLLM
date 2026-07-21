@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Chat, { type ChatHandle } from "@/components/Chat";
 import ChatHistory from "@/components/ChatHistory";
+import ModelHub from "@/components/ModelHub";
 import Settings from "@/components/Settings";
 import TabSwitcher, { type TabId } from "@/components/TabSwitcher";
 
@@ -41,6 +42,15 @@ export default function Home() {
             ref={chatRef}
             conversationId={conversationId}
             onConversationChange={setConversationId}
+          />
+        </div>
+        <div className={tab === "models" ? "h-full" : "hidden"}>
+          <ModelHub
+            active={tab === "models"}
+            onSelectModel={(id) => {
+              setTab("chat");
+              chatRef.current?.loadModel(id);
+            }}
           />
         </div>
         <div className={tab === "settings" ? "h-full" : "hidden"}>
