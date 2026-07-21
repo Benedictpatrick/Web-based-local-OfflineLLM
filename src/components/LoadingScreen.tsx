@@ -1,6 +1,34 @@
 "use client";
 
-const WORDMARK = ["N", "a", "v", "o"];
+// A comet-trail of dots flowing along a figure-8 path: they cross in the middle
+// and spread onto the loops, so the shape reads as an X, then an oval, and back.
+const ORBIT_DOTS = 12;
+const ORBIT_DURATION = 2.6;
+
+function OrbitLoader() {
+  return (
+    <div className="orbit-loader" aria-hidden="true">
+      {Array.from({ length: ORBIT_DOTS }).map((_, i) => {
+        const t = i / (ORBIT_DOTS - 1);
+        const size = 9 - t * 6; // head 9px tapering to 3px at the tail
+        return (
+          <span
+            key={i}
+            className="orbit-dot"
+            style={{
+              width: `${size}px`,
+              height: `${size}px`,
+              marginLeft: `${-size / 2}px`,
+              marginTop: `${-size / 2}px`,
+              opacity: 1 - t * 0.75,
+              animationDelay: `${-(i * ORBIT_DURATION) / ORBIT_DOTS}s`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 export default function LoadingScreen({
   status,
@@ -23,20 +51,7 @@ export default function LoadingScreen({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 px-6 text-center">
-      <div
-        aria-hidden="true"
-        className="flex items-center gap-1 text-5xl font-bold tracking-tight text-foreground"
-      >
-        {WORDMARK.map((ch, i) => (
-          <span
-            key={i}
-            className="inline-block animate-bounce"
-            style={{ animationDelay: `${i * 0.12}s`, animationDuration: "1s" }}
-          >
-            {ch}
-          </span>
-        ))}
-      </div>
+      <OrbitLoader />
       <span className="sr-only">Navo is loading</span>
 
       {status === "error" ? (
