@@ -43,6 +43,16 @@ const FAQS = [
     answer:
       "Yes. Navo AI runs entirely on-device: chat messages, notes, and downloaded models all stay in your browser and are never uploaded anywhere.",
   },
+  {
+    question: "How is Navo AI different from ChatGPT or other AI chatbots?",
+    answer:
+      "Most AI chatbots send every message to a company's server to generate a reply. Navo AI runs the entire model on your own device instead, so it keeps working with no internet connection, costs nothing per message, and never transmits what you type anywhere.",
+  },
+  {
+    question: "Can I use Navo AI on my phone?",
+    answer:
+      "Yes. Navo AI works in any modern mobile browser and can be installed to your phone's home screen as a Progressive Web App for a full screen experience that feels like a native app.",
+  },
 ];
 
 const FAQ_JSON_LD = {

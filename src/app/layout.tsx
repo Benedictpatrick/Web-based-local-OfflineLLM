@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 const SITE_URL = "https://navoai.space";
 const SITE_TITLE = "Navo AI: Private Offline AI Assistant";
 const SITE_DESCRIPTION =
-  "Navo AI is a private, offline AI assistant that runs entirely on your device, right in the browser. Chat, run code, and download open models like Llama, Gemma, and Qwen, with no server, no signup, and no internet needed after setup. Founded by Benedict Patrick and Saidharshan.";
+  "Navo AI, founded by Benedict Patrick and Saidharshan, is a private, offline AI assistant that runs entirely in your browser: no server, no signup, no internet needed after setup. Chat, run code, and download open models like Llama, Gemma, and Qwen.";
 const FOUNDERS = [
   { "@type": "Person", name: "Benedict Patrick" },
   { "@type": "Person", name: "Saidharshan" },
@@ -69,6 +69,9 @@ export const metadata: Metadata = {
     "AI study assistant",
     "run AI without internet",
     "browser based AI chat",
+    "who founded Navo AI",
+    "Navo AI founders",
+    "Benedict Patrick Saidharshan",
   ],
   authors: [{ name: "Benedict Patrick" }, { name: "Saidharshan" }],
   manifest: "/manifest.json",
