@@ -5,6 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { AVAILABLE_MODELS, deleteModelCache, isModelCached, type ModelId } from "@/lib/llm";
 import { isMemoryEnabled, setMemoryEnabled } from "@/lib/memory";
+import { getThemePreference, setThemePreference, type ThemePreference } from "@/lib/theme";
 import { haptic } from "@/lib/haptics";
 
 const REPO_URL = "https://github.com/Benedictpatrick/Web-based-local-OfflineLLM";
@@ -43,6 +44,43 @@ function Row({
   );
 }
 
+const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
+  { id: "system", label: "System" },
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+];
+
+function ThemeSegmented({
+  value,
+  onChange,
+}: {
+  value: ThemePreference;
+  onChange: (theme: ThemePreference) => void;
+}) {
+  return (
+    <div className="tab-switcher flex gap-0.5 rounded-lg p-0.5 text-xs">
+      {THEME_OPTIONS.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          aria-pressed={value === opt.id}
+          className={`rounded-md px-2.5 py-1.5 font-medium transition-colors ${
+            value === opt.id
+              ? "bg-accent text-accent-foreground"
+              : "text-foreground-muted hover:text-foreground"
+          }`}
+          onClick={() => {
+            if (opt.id !== value) haptic("tap");
+            onChange(opt.id);
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const DANGER_BUTTON =
   "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50";
 const DANGER_BUTTON_IDLE = "border-red-500/40 text-red-500 hover:bg-red-500 hover:text-white";
@@ -62,11 +100,20 @@ export default function Settings({
   // stored preference after mount (deferred so it doesn't run during the effect).
   const [memoryOn, setMemoryOn] = useState(true);
   const memories = useLiveQuery(() => db.memories.orderBy("createdAt").reverse().toArray(), [], []);
+  const [theme, setTheme] = useState<ThemePreference>("system");
 
   useEffect(() => {
-    const id = requestAnimationFrame(() => setMemoryOn(isMemoryEnabled()));
+    const id = requestAnimationFrame(() => {
+      setMemoryOn(isMemoryEnabled());
+      setTheme(getThemePreference());
+    });
     return () => cancelAnimationFrame(id);
   }, []);
+
+  function handleThemeChange(next: ThemePreference) {
+    setTheme(next);
+    setThemePreference(next);
+  }
   const [confirmClear, setConfirmClear] = useState<"chat" | "notes" | "memories" | null>(null);
   const [cleared, setCleared] = useState<"chat" | "notes" | "memories" | null>(null);
 
@@ -137,6 +184,14 @@ export default function Settings({
   return (
     <div className="h-full overflow-y-auto px-3 sm:px-5">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 py-6">
+        <SectionCard title="Appearance">
+          <Row
+            label="Theme"
+            description="Follow your system setting, or pick one explicitly."
+            action={<ThemeSegmented value={theme} onChange={handleThemeChange} />}
+          />
+        </SectionCard>
+
         <SectionCard title="Model">
           <Row
             label="Active model"

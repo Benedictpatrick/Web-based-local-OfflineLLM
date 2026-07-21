@@ -27,7 +27,9 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  /* :not([data-theme="light"]) lets an explicit "Light" choice in Settings
+   * override a dark system preference. */
+  :root:not([data-theme="light"]) {
     --background: #212121;
     --surface: #171717;
     --surface-hover: #2a2a2a;
@@ -38,6 +40,19 @@
     --accent-foreground: #ffffff;
     --bubble-user: #383838;
   }
+}
+
+/* Explicit "Dark" choice in Settings, applied regardless of system preference. */
+:root[data-theme="dark"] {
+  --background: #212121;
+  --surface: #171717;
+  --surface-hover: #2a2a2a;
+  --border: #2f2f2f;
+  --foreground: #ececec;
+  --foreground-muted: #9a9aa5;
+  --accent: #10a37f;
+  --accent-foreground: #ffffff;
+  --bubble-user: #383838;
 }
 
 * {
