@@ -102,8 +102,8 @@ body {
 
 .orbit-loader {
   position: relative;
-  width: 80px;
-  height: 44px;
+  width: 120px;
+  height: 66px;
 }
 
 .orbit-dot {
@@ -111,8 +111,9 @@ body {
   top: 0;
   left: 0;
   border-radius: 9999px;
-  background: var(--accent);
-  offset-path: path("M40 22 C56 6 76 6 76 22 C76 38 56 38 40 22 C24 6 4 6 4 22 C4 38 24 38 40 22 Z");
+  background: color-mix(in srgb, var(--accent) 78%, white);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 65%, transparent);
+  offset-path: path("M60 33 C84 9 114 9 114 33 C114 57 84 57 60 33 C36 9 6 9 6 33 C6 57 36 57 60 33 Z");
   animation: orbit-flow 2.6s linear infinite;
 }
 

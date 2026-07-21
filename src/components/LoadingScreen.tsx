@@ -10,7 +10,7 @@ function OrbitLoader() {
     <div className="orbit-loader" aria-hidden="true">
       {Array.from({ length: ORBIT_DOTS }).map((_, i) => {
         const t = i / (ORBIT_DOTS - 1);
-        const size = 9 - t * 6; // head 9px tapering to 3px at the tail
+        const size = 14 - t * 8; // head 14px tapering to 6px at the tail
         return (
           <span
             key={i}
@@ -20,7 +20,7 @@ function OrbitLoader() {
               height: `${size}px`,
               marginLeft: `${-size / 2}px`,
               marginTop: `${-size / 2}px`,
-              opacity: 1 - t * 0.75,
+              opacity: 1 - t * 0.5,
               animationDelay: `${-(i * ORBIT_DURATION) / ORBIT_DOTS}s`,
             }}
           />
