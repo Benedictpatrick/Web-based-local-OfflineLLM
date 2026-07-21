@@ -5,6 +5,7 @@ import {
   AVAILABLE_MODELS,
   deleteModelCache,
   isModelCached,
+  isWebgpuOnly,
   type ModelId,
 } from "@/lib/llm";
 import { haptic } from "@/lib/haptics";
@@ -14,12 +15,17 @@ export default function ModelPicker({
   onChange,
   disabled,
   onModelDeleted,
+  onBrowseMore,
   variant = "default",
 }: {
   value: ModelId;
   onChange: (id: ModelId) => void;
   disabled?: boolean;
   onModelDeleted?: (id: ModelId) => void;
+  /** Opens the full Model Hub. When provided, the dropdown only lists the
+   *  original baseline models plus anything already downloaded or active,
+   *  instead of dumping all 18 catalog entries into a short list. */
+  onBrowseMore?: () => void;
   /** "chip" renders a compact pill trigger (sparkle + label) for the chat
    *  header, instead of the full-width bordered box used elsewhere. */
   variant?: "default" | "chip";
@@ -29,6 +35,9 @@ export default function ModelPicker({
   const [deletingId, setDeletingId] = useState<ModelId | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = AVAILABLE_MODELS.find((m) => m.id === value);
+  const listedModels = AVAILABLE_MODELS.filter(
+    (m) => !isWebgpuOnly(m) || cached[m.id] || m.id === value,
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -143,11 +152,11 @@ export default function ModelPicker({
       {open && (
         <div
           role="listbox"
-          className={`absolute top-full z-10 mt-2 overflow-hidden rounded-2xl border border-border bg-background py-1.5 shadow-lg ${
+          className={`absolute top-full z-10 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-border bg-background py-1.5 shadow-lg ${
             variant === "chip" ? "w-64 max-w-[80vw]" : "w-full"
           }`}
         >
-          {AVAILABLE_MODELS.map((m) => (
+          {listedModels.map((m) => (
             <div
               key={m.id}
               role="option"
@@ -202,6 +211,19 @@ export default function ModelPicker({
               )}
             </div>
           ))}
+          {onBrowseMore && (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-left text-sm text-accent transition-colors hover:bg-surface"
+              onClick={() => {
+                haptic("tap");
+                setOpen(false);
+                onBrowseMore();
+              }}
+            >
+              Browse more in Model Hub
+            </button>
+          )}
         </div>
       )}
     </div>

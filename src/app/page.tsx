@@ -42,6 +42,7 @@ export default function Home() {
             ref={chatRef}
             conversationId={conversationId}
             onConversationChange={setConversationId}
+            onBrowseModelHub={() => setTab("models")}
           />
         </div>
         <div className={tab === "models" ? "h-full" : "hidden"}>

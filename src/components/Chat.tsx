@@ -164,10 +164,12 @@ export interface ChatHandle {
 export default function Chat({
   conversationId,
   onConversationChange,
+  onBrowseModelHub,
   ref,
 }: {
   conversationId: number | null;
   onConversationChange: (id: number) => void;
+  onBrowseModelHub?: () => void;
   ref?: React.Ref<ChatHandle>;
 }) {
   const messages = useLiveQuery(
@@ -703,6 +705,7 @@ export default function Chat({
             onModelDeleted={(id) => {
               if (id === modelId) setProgress("");
             }}
+            onBrowseMore={onBrowseModelHub}
           />
         </div>
         {hasLoadedOnce && (
@@ -748,6 +751,7 @@ export default function Chat({
             onModelDeleted={(id) => {
               if (id === modelId) setProgress("");
             }}
+            onBrowseMore={onBrowseModelHub}
           />
           <button
             type="button"
