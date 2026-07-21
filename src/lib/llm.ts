@@ -3,6 +3,7 @@ import type {
   ChatCompletionMessage,
 } from "@wllama/wllama/esm/index.js";
 import type { MLCEngine } from "@mlc-ai/web-llm";
+import type { Provider } from "@/lib/brandIcons";
 
 const HF_BASE = "https://huggingface.co";
 
@@ -30,6 +31,8 @@ export interface ModelEntry {
   sizeGB: number;
   /** Store-style genre tag shown on Hub cards. */
   category: ModelCategory;
+  /** Who makes this model, for the Hub's company filter and badge. */
+  provider: Provider;
 }
 
 /** The original 3 models: hand-verified on both WebGPU and WASM, and the
@@ -43,6 +46,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     mlcId: "Llama-3.2-1B-Instruct-q4f16_1-MLC",
     sizeGB: 0.7,
     category: "tiny",
+    provider: "meta",
   },
   {
     id: "gemma2-2b",
@@ -52,6 +56,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     mlcId: "gemma-2-2b-it-q4f16_1-MLC",
     sizeGB: 1.6,
     category: "balanced",
+    provider: "google",
   },
   {
     id: "llama3.2-3b",
@@ -61,6 +66,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     mlcId: "Llama-3.2-3B-Instruct-q4f16_1-MLC",
     sizeGB: 1.9,
     category: "balanced",
+    provider: "meta",
   },
   // Model Hub additions below. WebGPU-only: mlcId values are copied verbatim
   // from @mlc-ai/web-llm's own prebuiltAppConfig.model_list, which is the
@@ -74,6 +80,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Meta's larger general purpose model. A strong generalist if your device can take it.",
     sizeGB: 4.9,
     category: "powerful",
+    provider: "meta",
   },
   {
     id: "qwen2.5-7b",
@@ -82,6 +89,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Alibaba's flagship small model. Excellent general reasoning and writing.",
     sizeGB: 5,
     category: "powerful",
+    provider: "qwen",
   },
   {
     id: "qwen2.5-3b",
@@ -90,6 +98,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "A lighter Qwen 2.5, good middle ground between speed and quality.",
     sizeGB: 2.4,
     category: "balanced",
+    provider: "qwen",
   },
   {
     id: "qwen2.5-0.5b",
@@ -98,6 +107,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Very small and fast. Best for quick, simple questions on weaker devices.",
     sizeGB: 0.9,
     category: "tiny",
+    provider: "qwen",
   },
   {
     id: "qwen2.5-coder-7b",
@@ -106,6 +116,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Tuned specifically for code generation and debugging.",
     sizeGB: 5,
     category: "coding",
+    provider: "qwen",
   },
   {
     id: "qwen2.5-math-1.5b",
@@ -114,6 +125,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Tuned specifically for math problem solving and reasoning that shows each step.",
     sizeGB: 1.6,
     category: "math",
+    provider: "qwen",
   },
   {
     id: "phi-3.5-mini",
@@ -122,6 +134,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Microsoft's efficient midsize model, strong for its footprint.",
     sizeGB: 3.6,
     category: "balanced",
+    provider: "microsoft",
   },
   {
     id: "phi-4-mini",
@@ -130,6 +143,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Microsoft's newest small model. Better reasoning than Phi 3.5 at a similar size.",
     sizeGB: 3.4,
     category: "powerful",
+    provider: "microsoft",
   },
   {
     id: "mistral-7b-v0.3",
@@ -138,6 +152,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "An established, well rounded open model.",
     sizeGB: 4.5,
     category: "powerful",
+    provider: "mistral",
   },
   {
     id: "gemma2-9b",
@@ -146,6 +161,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Google's larger Gemma 2. Needs a capable GPU but gives noticeably better answers.",
     sizeGB: 6.3,
     category: "powerful",
+    provider: "google",
   },
   {
     id: "gemma3-1b",
@@ -154,6 +170,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Google's newest generation at a very small size.",
     sizeGB: 0.7,
     category: "tiny",
+    provider: "google",
   },
   {
     id: "smollm2-1.7b",
@@ -162,6 +179,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Hugging Face's compact model, built to punch above its size.",
     sizeGB: 1.7,
     category: "tiny",
+    provider: "huggingface",
   },
   {
     id: "smollm2-360m",
@@ -170,6 +188,7 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Extremely small and fast. Best for simple tasks on low power devices.",
     sizeGB: 0.4,
     category: "tiny",
+    provider: "huggingface",
   },
   {
     id: "deepseek-r1-qwen-7b",
@@ -178,12 +197,14 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     hubDescription: "Distilled from DeepSeek R1, shows its reasoning steps before answering.",
     sizeGB: 5,
     category: "reasoning",
+    provider: "deepseek",
   },
   {
     id: "qwen3-4b",
     label: "Qwen 3 4B (balanced, ~3.4GB)",
     mlcId: "Qwen3-4B-q4f16_1-MLC",
     hubDescription: "The latest Qwen generation at a midrange size.",
+    provider: "qwen",
     sizeGB: 3.4,
     category: "balanced",
   },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AVAILABLE_MODELS,
   deleteModelCache,
@@ -13,6 +13,7 @@ import {
   type ModelCategory,
   type ModelId,
 } from "@/lib/llm";
+import { BRAND_ICONS, MULTI_COLOR_ICONS, PROVIDER_NAMES, type Provider } from "@/lib/brandIcons";
 import { haptic } from "@/lib/haptics";
 
 const CATEGORY_LABELS: Record<ModelCategory, string> = {
@@ -23,6 +24,37 @@ const CATEGORY_LABELS: Record<ModelCategory, string> = {
   math: "Math",
   reasoning: "Reasoning",
 };
+
+const TAG_CLASS = "rounded-md bg-surface-hover px-1.5 py-0.5 text-xs font-medium text-foreground-muted";
+
+function BrandMark({ provider }: { provider: Provider }) {
+  const multi = MULTI_COLOR_ICONS[provider];
+  if (multi) {
+    return (
+      <svg width="12" height="12" viewBox={multi.viewBox} className="shrink-0" aria-hidden="true">
+        {multi.paths.map((p, i) => (
+          <path key={i} fill={p.fill} d={p.d} />
+        ))}
+      </svg>
+    );
+  }
+  const icon = BRAND_ICONS[provider];
+  if (!icon) return null;
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill={icon.hex} className="shrink-0" aria-hidden="true">
+      <path d={icon.path} />
+    </svg>
+  );
+}
+
+function CompanyBadge({ provider }: { provider: Provider }) {
+  return (
+    <span className={`inline-flex items-center gap-1 ${TAG_CLASS}`}>
+      <BrandMark provider={provider} />
+      {PROVIDER_NAMES[provider]}
+    </span>
+  );
+}
 
 export default function ModelHub({
   active,
@@ -36,7 +68,25 @@ export default function ModelHub({
   const [activeModelId, setActiveModelId] = useState<ModelId | null>(null);
   const [deletingId, setDeletingId] = useState<ModelId | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<ModelId | null>(null);
+  const [providerFilter, setProviderFilter] = useState<Provider | "all">("all");
   const memoryGb = getDeviceInfo().memoryGb;
+
+  const providers = useMemo(() => {
+    const seen = new Set<Provider>();
+    const ordered: Provider[] = [];
+    for (const m of AVAILABLE_MODELS) {
+      if (!seen.has(m.provider)) {
+        seen.add(m.provider);
+        ordered.push(m.provider);
+      }
+    }
+    return ordered;
+  }, []);
+
+  const visibleModels =
+    providerFilter === "all"
+      ? AVAILABLE_MODELS
+      : AVAILABLE_MODELS.filter((m) => m.provider === providerFilter);
 
   useEffect(() => {
     if (!active) return;
@@ -88,8 +138,42 @@ export default function ModelHub({
             device from then on.
           </p>
         </div>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+              providerFilter === "all"
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border text-foreground-muted hover:bg-surface-hover"
+            }`}
+            onClick={() => {
+              haptic("tap");
+              setProviderFilter("all");
+            }}
+          >
+            All
+          </button>
+          {providers.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                providerFilter === p
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border text-foreground-muted hover:bg-surface-hover"
+              }`}
+              onClick={() => {
+                haptic("tap");
+                setProviderFilter(p);
+              }}
+            >
+              <BrandMark provider={p} />
+              {PROVIDER_NAMES[p]}
+            </button>
+          ))}
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {AVAILABLE_MODELS.map((m) => {
+          {visibleModels.map((m) => {
             const gpuLocked = webgpu === false && isWebgpuOnly(m);
             const isActive = m.id === activeModelId;
             const tooLarge = !gpuLocked && isLikelyTooLargeForDevice(m.sizeGB, memoryGb);
@@ -100,15 +184,12 @@ export default function ModelHub({
                   isActive ? "border-accent" : "border-border"
                 } ${gpuLocked ? "opacity-50" : ""}`}
               >
-                <div className="flex items-center gap-1.5">
-                  <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-foreground-muted">
-                    {CATEGORY_LABELS[m.category]}
-                  </span>
-                  <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-foreground-muted">
-                    ~{m.sizeGB}GB
-                  </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <CompanyBadge provider={m.provider} />
+                  <span className={TAG_CLASS}>{CATEGORY_LABELS[m.category]}</span>
+                  <span className={TAG_CLASS}>~{m.sizeGB}GB</span>
                   {isActive && (
-                    <span className="ml-auto shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+                    <span className="ml-auto shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-xs font-medium text-accent">
                       Active
                     </span>
                   )}

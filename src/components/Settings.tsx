@@ -13,6 +13,7 @@ import {
 } from "@/lib/llm";
 import { isMemoryEnabled, setMemoryEnabled } from "@/lib/memory";
 import { getThemePreference, setThemePreference, type ThemePreference } from "@/lib/theme";
+import { useInstallPrompt } from "@/lib/useInstallPrompt";
 import { haptic } from "@/lib/haptics";
 
 const REPO_URL = "https://github.com/Benedictpatrick/Web-based-local-OfflineLLM";
@@ -113,6 +114,7 @@ export default function Settings({
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>("system");
+  const { isStandalone, isIOS, canInstall, canPromptNatively, promptInstall } = useInstallPrompt();
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -223,6 +225,41 @@ export default function Settings({
             action={<ThemeSegmented value={theme} onChange={handleThemeChange} />}
           />
         </SectionCard>
+
+        {(isStandalone || canInstall) && (
+          <SectionCard title="App">
+            {isStandalone ? (
+              <Row
+                label="Installed"
+                description="Navo is running as an installed app, so downloaded models are much less likely to be cleaned up by the browser."
+                action={<span className="text-sm text-accent">✓</span>}
+              />
+            ) : (
+              <Row
+                label="Install Navo"
+                description={
+                  isIOS
+                    ? 'Tap Share, then "Add to Home Screen". Installed apps are far less likely to have downloaded models deleted by the browser.'
+                    : "Keeps downloaded models from being deleted by the browser to free up space."
+                }
+                action={
+                  canPromptNatively ? (
+                    <button
+                      type="button"
+                      className="rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:bg-background"
+                      onClick={() => {
+                        haptic("tap");
+                        promptInstall();
+                      }}
+                    >
+                      Install
+                    </button>
+                  ) : null
+                }
+              />
+            )}
+          </SectionCard>
+        )}
 
         <SectionCard title="Model">
           <Row

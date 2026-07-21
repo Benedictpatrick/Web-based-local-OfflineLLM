@@ -36,6 +36,7 @@ import { haptic } from "@/lib/haptics";
 import ModelPicker from "@/components/ModelPicker";
 import MarkdownMessage from "@/components/MarkdownMessage";
 import LoadingScreen from "@/components/LoadingScreen";
+import InstallBanner from "@/components/InstallBanner";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -814,6 +815,7 @@ export default function Chat({
             );
           })()}
       </div>
+      <InstallBanner storagePersisted={storagePersisted} />
 
       <div className="relative min-h-0 flex-1">
       <div
