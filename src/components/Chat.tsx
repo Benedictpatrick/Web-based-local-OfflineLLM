@@ -126,10 +126,10 @@ const MessageHistory = memo(function MessageHistory({
 });
 
 const SYSTEM_PROMPT =
-  "You are Navo, a private study assistant running entirely on this device, so nothing the user types ever leaves their browser. Always answer the user's most recent message, directly and briefly: 1-3 sentences unless they ask for detail, a list, or code. Never include code unless they explicitly ask for code; when they do, give complete working code in a fenced block tagged with the language name. Code must be plain code with no LaTeX in it. Outside of code, write any mathematics in LaTeX delimiters: $...$ inline, $$...$$ for standalone equations, never plain text or unicode symbols. If saved notes or things you know about the user are provided below, use them naturally without mentioning them, and never assume details about the user that aren't given.";
+  "You are Navo, a private offline AI assistant running entirely on this device, so nothing the user types ever leaves their browser. Always answer the user's most recent message, directly and briefly: 1-3 sentences unless they ask for detail, a list, or code. Never include code unless they explicitly ask for code; when they do, give complete working code in a fenced block tagged with the language name. Code must be plain code with no LaTeX in it. Outside of code, write any mathematics in LaTeX delimiters: $...$ inline, $$...$$ for standalone equations, never plain text or unicode symbols. If saved notes or things you know about the user are provided below, use them naturally without mentioning them, and never assume details about the user that aren't given.";
 
 const SMALL_TALK_PROMPT =
-  "You are Navo, a friendly private study assistant. The user is greeting you or making small talk. Reply with one short, warm sentence that answers them and invites a question.";
+  "You are Navo, a friendly private offline AI assistant. The user is greeting you or making small talk. Reply with one short, warm sentence that answers them and invites a question.";
 
 const SMALL_TALK_RE =
   /^(hi+|hii+|hey+( there)?|hello+|yo+|sup|wassup|what'?s up|howdy|good (morning|afternoon|evening|night)|how are you( doing)?|how'?s it going|thank(s| you)( so much| a lot)?|ok(ay)?|cool|nice|great|bye+|goodbye|see you|hola|namaste)[\s!.?,]*$/i;
@@ -668,11 +668,13 @@ export default function Chat({
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
         {!hasLoadedOnce && (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/navo-wordmark.png" alt="Navo" aria-hidden="true" className="mb-1 h-10 w-auto" />
+            <h1 className="mb-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/navo-wordmark.png" alt="Navo AI" className="h-10 w-auto" />
+            </h1>
             <p className="max-w-xs text-sm text-foreground-muted">
-              A private study assistant that runs entirely on this device. Nothing you type
-              ever leaves your browser, and it keeps working offline.
+              Navo AI is a private, offline AI assistant that runs entirely on this device.
+              Nothing you type ever leaves your browser, and it keeps working offline.
             </p>
             <div className="mt-3 flex flex-col items-center gap-1.5">
               <div className="h-px w-10 bg-border" />

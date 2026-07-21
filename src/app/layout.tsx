@@ -14,11 +14,84 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = "https://navoai.space";
+const SITE_TITLE = "Navo AI: Private Offline AI Assistant";
+const SITE_DESCRIPTION =
+  "Navo AI is a private, offline AI assistant that runs entirely on your device, right in the browser. Chat, run code, and download open models like Llama, Gemma, and Qwen, with no server, no signup, and no internet needed after setup. Founded by Benedict Patrick and Saidharshan.";
+const FOUNDERS = [
+  { "@type": "Person", name: "Benedict Patrick" },
+  { "@type": "Person", name: "Saidharshan" },
+];
+
+const SOFTWARE_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Navo AI",
+  applicationCategory: "EducationalApplication",
+  operatingSystem: "Any modern web browser",
+  description: SITE_DESCRIPTION,
+  url: SITE_URL,
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "USD",
+  },
+  author: FOUNDERS,
+};
+
+const ORGANIZATION_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Navo AI",
+  url: SITE_URL,
+  logo: `${SITE_URL}/navo-wordmark.png`,
+  founder: FOUNDERS,
+  sameAs: ["https://github.com/Benedictpatrick/Web-based-local-OfflineLLM"],
+};
+
 export const metadata: Metadata = {
-  title: "Navo",
-  description:
-    "A private AI assistant and coding notebook that runs entirely on your device. No internet required after setup.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_TITLE,
+    template: "%s | Navo AI",
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: "Navo AI",
+  keywords: [
+    "Navo AI",
+    "Navo",
+    "offline AI",
+    "offline AI assistant",
+    "offline AI chat",
+    "private AI assistant",
+    "on device AI",
+    "local AI chat",
+    "AI study assistant",
+    "run AI without internet",
+    "browser based AI chat",
+  ],
+  authors: [{ name: "Benedict Patrick" }, { name: "Saidharshan" }],
   manifest: "/manifest.json",
+  alternates: {
+    canonical: SITE_URL,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    siteName: "Navo AI",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 export const viewport: Viewport = {
@@ -45,6 +118,14 @@ export default function RootLayout({
       {/* eslint-disable-next-line @next/next/no-css-tags */}
       <link rel="stylesheet" href="/katex/katex.min.css" precedence="default" />
       <body className="min-h-full flex flex-col">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(SOFTWARE_JSON_LD) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
+        />
         {/* Applied before first paint so an explicit Light/Dark choice doesn't
          * flash the system-preference theme first. */}
         <Script

@@ -32,7 +32,7 @@ export default function Home() {
             </svg>
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/navo-wordmark.png" alt="Navo" className="h-5 w-auto shrink-0" />
+          <img src="/navo-wordmark.png" alt="Navo AI" className="h-5 w-auto shrink-0" />
         </div>
         <TabSwitcher active={tab} onChange={setTab} />
       </header>

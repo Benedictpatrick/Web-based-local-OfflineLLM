@@ -1,7 +1,7 @@
 {
-  "name": "Navo",
-  "short_name": "Navo",
-  "description": "A private AI study assistant and coding notebook that runs entirely on your device.",
+  "name": "Navo AI",
+  "short_name": "Navo AI",
+  "description": "Navo AI is a private, offline AI assistant that runs entirely on your device, with model downloads, code execution, and notes built in.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#212121",

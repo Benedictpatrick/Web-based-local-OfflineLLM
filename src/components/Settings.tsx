@@ -515,11 +515,11 @@ export default function Settings({
 
         <SectionCard title="About">
           <Row
-            label="Navo"
-            description="A private study assistant that runs entirely on your device. Nothing you type ever leaves your browser."
+            label="Navo AI"
+            description="A private, offline AI assistant that runs entirely on your device. Nothing you type ever leaves your browser."
             action={null}
           />
-          <Row label="Built by" action={<span className="text-sm text-foreground-muted">{AUTHOR_NAME}</span>} />
+          <Row label="Founders" action={<span className="text-sm text-foreground-muted">{AUTHOR_NAME}</span>} />
           <Row
             label="Source code"
             action={
