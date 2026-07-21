@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
+import { embed } from "@/lib/embeddings";
 import { AVAILABLE_MODELS, deleteModelCache, isModelCached, type ModelId } from "@/lib/llm";
 import { isMemoryEnabled, setMemoryEnabled } from "@/lib/memory";
 import { getThemePreference, setThemePreference, type ThemePreference } from "@/lib/theme";
@@ -100,6 +101,9 @@ export default function Settings({
   // stored preference after mount (deferred so it doesn't run during the effect).
   const [memoryOn, setMemoryOn] = useState(true);
   const memories = useLiveQuery(() => db.memories.orderBy("createdAt").reverse().toArray(), [], []);
+  const notes = useLiveQuery(() => db.journal.orderBy("createdAt").reverse().toArray(), [], []);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>("system");
 
   useEffect(() => {
@@ -113,6 +117,24 @@ export default function Settings({
   function handleThemeChange(next: ThemePreference) {
     setTheme(next);
     setThemePreference(next);
+  }
+
+  async function handleAddNote() {
+    const text = noteDraft.trim();
+    if (!text) return;
+    setNoteDraft("");
+    setSavingNote(true);
+    try {
+      const embedding = await embed(text);
+      await db.journal.add({ text, createdAt: Date.now(), embedding });
+    } finally {
+      setSavingNote(false);
+    }
+  }
+
+  async function handleDeleteNote(id: number) {
+    haptic("tap");
+    await db.journal.delete(id);
   }
   const [confirmClear, setConfirmClear] = useState<"chat" | "notes" | "memories" | null>(null);
   const [cleared, setCleared] = useState<"chat" | "notes" | "memories" | null>(null);
@@ -310,6 +332,52 @@ export default function Settings({
                   ? "As you chat, facts you mention will show up here for you to review or remove."
                   : "Memory is off, so Navo won't note anything about you."
               }
+              action={null}
+            />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Notes">
+          <div className="px-4 py-3">
+            <textarea
+              className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none placeholder:text-foreground-muted"
+              rows={3}
+              placeholder="Save a code snippet, a concept you're still shaky on, or notes from a lecture. Navo pulls this up in Chat when it's relevant."
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                className="rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+                onClick={handleAddNote}
+                disabled={!noteDraft.trim() || savingNote}
+              >
+                {savingNote ? "Saving…" : "Save note"}
+              </button>
+            </div>
+          </div>
+          {(notes ?? []).length > 0 ? (
+            (notes ?? []).map((n) => (
+              <Row
+                key={n.id}
+                label={n.text.length > 80 ? `${n.text.slice(0, 80)}…` : n.text}
+                description={new Date(n.createdAt).toLocaleString()}
+                action={
+                  <button
+                    type="button"
+                    className="rounded-full border border-border px-3 py-1.5 text-xs text-foreground-muted transition-colors hover:border-red-500/40 hover:text-red-500"
+                    onClick={() => handleDeleteNote(n.id)}
+                  >
+                    Delete
+                  </button>
+                }
+              />
+            ))
+          ) : (
+            <Row
+              label="No notes yet"
+              description="Save a snippet, a definition, or anything from a lecture above — Navo will draw on it in Chat."
               action={null}
             />
           )}

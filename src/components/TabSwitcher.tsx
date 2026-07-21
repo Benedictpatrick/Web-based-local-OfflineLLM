@@ -3,11 +3,10 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { haptic } from "@/lib/haptics";
 
-export type TabId = "chat" | "notes" | "settings";
+export type TabId = "chat" | "settings";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "chat", label: "Chat" },
-  { id: "notes", label: "Notes" },
   { id: "settings", label: "Settings" },
 ];
 

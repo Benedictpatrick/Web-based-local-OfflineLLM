@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import Chat, { type ChatHandle } from "@/components/Chat";
 import ChatHistory from "@/components/ChatHistory";
-import Journal from "@/components/Journal";
 import Settings from "@/components/Settings";
 import TabSwitcher, { type TabId } from "@/components/TabSwitcher";
 
@@ -43,9 +42,6 @@ export default function Home() {
             conversationId={conversationId}
             onConversationChange={setConversationId}
           />
-        </div>
-        <div className={tab === "notes" ? "h-full" : "hidden"}>
-          <Journal />
         </div>
         <div className={tab === "settings" ? "h-full" : "hidden"}>
           <Settings
