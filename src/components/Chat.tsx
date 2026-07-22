@@ -893,34 +893,21 @@ export default function Chat({
   return (
     <div className="flex h-full flex-col">
       <div className="px-3 py-2 text-xs text-foreground-muted sm:px-5">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-          <div className="min-w-0 justify-self-start">
-            <ModelPicker
-              variant="chip"
-              value={modelId}
-              disabled={streaming}
-              onChange={(id) => {
-                setModelId(id);
-                handleLoadModel(id);
-              }}
-              onModelDeleted={(id) => {
-                if (id === modelId) setProgress("");
-              }}
-              onBrowseMore={onBrowseModelHub}
-            />
-          </div>
-          {/* Its own grid column (not just a flex sibling) so it stays dead-center
-              regardless of how many chips show up on either side -- the share chip
-              below only appears once a reply has finished, and a plain flex row
-              with justify-between would drag this off-center when that happens. */}
-          <div className="justify-self-center">
-            <ModeSwitch
-              active={researchMode ? "research" : "navo"}
-              onChange={handleModeSwitch}
-              disabled={streaming || modeSwitching !== null}
-            />
-          </div>
-          <div className="flex items-center justify-self-end gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <ModelPicker
+            variant="chip"
+            value={modelId}
+            disabled={streaming}
+            onChange={(id) => {
+              setModelId(id);
+              handleLoadModel(id);
+            }}
+            onModelDeleted={(id) => {
+              if (id === modelId) setProgress("");
+            }}
+            onBrowseMore={onBrowseModelHub}
+          />
+          <div className="flex items-center gap-2">
             <button
               type="button"
               className={`glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
@@ -1141,6 +1128,13 @@ export default function Chat({
         style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
       >
         <div className="mx-auto w-full max-w-2xl">
+          <div className="mb-2 flex justify-center">
+            <ModeSwitch
+              active={researchMode ? "research" : "navo"}
+              onChange={handleModeSwitch}
+              disabled={streaming || modeSwitching !== null}
+            />
+          </div>
           {(micState !== "idle" || micError) && (
             <div className="mb-2 flex items-center gap-2 text-xs">
               {micState === "recording" && (
