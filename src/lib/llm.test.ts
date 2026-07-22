@@ -62,6 +62,48 @@ describe("withStallWatchdog", () => {
   });
 });
 
+describe("loadEngine WebGPU recovery", () => {
+  const originalNavigator = globalThis.navigator;
+
+  beforeEach(() => {
+    vi.resetModules();
+    Object.defineProperty(globalThis, "navigator", {
+      value: { gpu: { requestAdapter: () => Promise.resolve({}) } },
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, "navigator", {
+      value: originalNavigator,
+      configurable: true,
+    });
+    vi.doUnmock("@mlc-ai/web-llm");
+  });
+
+  it("retries WebGPU on the next call instead of permanently downgrading to WASM", async () => {
+    let createCalls = 0;
+    vi.doMock("@mlc-ai/web-llm", () => ({
+      CreateMLCEngine: vi.fn(async () => {
+        createCalls++;
+        if (createCalls === 1) throw new Error("transient WebGPU failure");
+        return { unload: vi.fn() };
+      }),
+    }));
+
+    const { loadEngine } = await import("./llm");
+
+    // qwen3-4b has no WASM fallback (no repo/file), so a WebGPU failure here
+    // must surface as "requires WebGPU" -- but should NOT permanently mark
+    // the whole session as WASM-only for later calls.
+    await expect(loadEngine("qwen3-4b")).rejects.toThrow(/requires WebGPU/);
+    expect(createCalls).toBe(1);
+
+    await loadEngine("qwen3-4b");
+    expect(createCalls).toBe(2);
+  });
+});
+
 describe("recommendModel", () => {
   it("recommends the one dedicated model for each specialized purpose", () => {
     expect(recommendModel("coding", "balanced", true, null).model.id).toBe("qwen2.5-coder-7b");

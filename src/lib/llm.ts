@@ -279,7 +279,11 @@ export function withStallWatchdog<T>(run: (touch: () => void) => Promise<T>): Pr
         reject(new LoadStalledError());
       }
     }, 2000);
-    attempt.finally(() => clearInterval(interval));
+    // .finally() returns a derived promise that mirrors attempt's rejection;
+    // it's only here for the clearInterval side effect and nothing else
+    // consumes it, so without this catch a genuine load failure surfaces as
+    // an unhandled promise rejection on top of the real, handled one above.
+    attempt.finally(() => clearInterval(interval)).catch(() => {});
   });
   return Promise.race([attempt, watchdog]);
 }
@@ -373,18 +377,19 @@ export async function loadEngine(
   const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
   if (!model) throw new Error(`Unknown model: ${modelId}`);
 
-  if (engineKind === null) {
-    engineKind = (await hasWebGpu()) ? "webgpu" : "wasm";
-  }
-
-  if (engineKind === "webgpu") {
+  // Re-checked (not read from the `engineKind` cache) on every call: hasWebGpu()
+  // is memoized so this is cheap, and it means a single transient WebGPU
+  // failure (a stall, a one-off context loss) can't permanently downgrade the
+  // whole session to WASM. `engineKind` below only *records* which engine is
+  // currently active for getEngineKind() -- it must not gate this decision.
+  if (await hasWebGpu()) {
     try {
       await loadWebgpuEngine(model.mlcId, onProgress);
+      engineKind = "webgpu";
       loadedModelId = modelId;
       return;
     } catch (err) {
       console.error("WebGPU engine failed, falling back to CPU/WASM:", err);
-      engineKind = "wasm";
     }
   }
 
@@ -393,6 +398,7 @@ export async function loadEngine(
   }
 
   await loadWasmEngine(model, onProgress);
+  engineKind = "wasm";
   loadedModelId = modelId;
 }
 
