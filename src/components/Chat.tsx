@@ -34,6 +34,7 @@ import { extractTextFromFile, chunkText } from "@/lib/fileExtraction";
 import { extractSolePythonBlock } from "@/lib/agentCode";
 import { runPython } from "@/lib/pythonRunner";
 import { transcribeAudio, type SpeechModelProgress } from "@/lib/speechRecognition";
+import { shareOrDownloadBenchmarkCard } from "@/lib/shareCard";
 import { haptic } from "@/lib/haptics";
 import ModelPicker from "@/components/ModelPicker";
 import LoadingScreen from "@/components/LoadingScreen";
@@ -208,6 +209,7 @@ export default function Chat({
   const [lastStats, setLastStats] = useState<GenerationStats | null>(null);
   const [storagePersisted, setStoragePersisted] = useState<boolean | null>(null);
   const [showStats, setShowStats] = useState(false);
+  const [sharingCard, setSharingCard] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; chunks: TextChunk[] } | null>(
     null
@@ -808,6 +810,41 @@ export default function Chat({
             </svg>
             Stats
           </button>
+          {lastStats && (
+            <button
+              type="button"
+              className="glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground disabled:opacity-50"
+              disabled={sharingCard}
+              onClick={async () => {
+                haptic("tap");
+                setSharingCard(true);
+                try {
+                  const selected = AVAILABLE_MODELS.find((m) => m.id === modelId);
+                  const device = getDeviceInfo();
+                  await shareOrDownloadBenchmarkCard({
+                    modelName: selected ? modelDisplayParts(selected).name : modelId,
+                    engine: lastStats.engine,
+                    tokensPerSec: lastStats.tokensPerSec,
+                    cores: device.cores,
+                    memoryGb: device.memoryGb,
+                  });
+                } finally {
+                  setSharingCard(false);
+                }
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                <path
+                  d="M12 4v12M12 4 7 9m5-5 5 5M5 20h14"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {sharingCard ? "Sharing…" : "Share"}
+            </button>
+          )}
         </div>
         <div
           className={`overflow-hidden transition-[max-height,opacity] duration-500 ease-out ${
