@@ -1,10 +1,16 @@
 import type { ChatCompletionMessage } from "@wllama/wllama/esm/index.js";
 import { abortGeneration, isAbortError, isEngineLostError, streamChat } from "./llm";
+import { looksGarbled } from "./garbledOutput";
 
 /** How long a generation can go with no new chunk before it's treated as stuck
  *  (as opposed to just slow) and aborted for a retry. */
 const STUCK_GENERATION_TIMEOUT_MS = 45_000;
 const MAX_STUCK_RETRIES = 1;
+/** Rare WebGPU compute glitches occasionally produce word-salad output
+ *  (see garbledOutput.ts); one silent retry clears it in practice, and a
+ *  second bad attempt in a row is treated as a real (if unusual) reply
+ *  rather than retried forever. */
+const MAX_GARBLED_RETRIES = 1;
 
 export interface GenerateOnceOptions {
   temperature?: number;
@@ -68,6 +74,11 @@ export async function generateOnce(
         if (attempt < MAX_STUCK_RETRIES) continue;
         console.error("Generation stalled with no response");
         full = full || "Generation stalled — please try again.";
+        break;
+      }
+      if (looksGarbled(full) && attempt < MAX_GARBLED_RETRIES) {
+        console.error("Generation looked garbled, retrying once");
+        continue;
       }
       break;
     } catch (err) {
