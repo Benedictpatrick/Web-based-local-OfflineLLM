@@ -15,14 +15,13 @@ import {
   getEngineKind,
   getLastGenerationStats,
   getLoadedContextSize,
-  isAbortError,
-  isEngineLostError,
   requestPersistentStorage,
   isWasmSupported,
   loadEngine,
   modelDisplayParts,
-  streamChat,
 } from "@/lib/llm";
+import { generateOnce } from "@/lib/generation";
+import { runResearch } from "@/lib/research";
 import { topRelevantEntries, embedChunks, topRelevantChunks, type TextChunk } from "@/lib/retrieval";
 import {
   isMemoryEnabled,
@@ -39,6 +38,9 @@ import { haptic } from "@/lib/haptics";
 import ModelPicker from "@/components/ModelPicker";
 import LoadingScreen from "@/components/LoadingScreen";
 import InstallBanner from "@/components/InstallBanner";
+import ResearchScopeModal, { type ResearchScopeAnswers } from "@/components/ResearchScopeModal";
+import ResearchProgress, { type ResearchStep } from "@/components/ResearchProgress";
+import ModeSwitch from "@/components/ModeSwitch";
 
 // react-markdown + katex + the syntax-highlighter's language grammars are
 // ~650KB on their own and aren't needed until a message actually renders, so
@@ -189,8 +191,6 @@ const EXAMPLE_PROMPTS = [
   "Summarize my notes on OS scheduling",
 ];
 
-const STUCK_GENERATION_TIMEOUT_MS = 45_000;
-const MAX_STUCK_RETRIES = 1;
 const MAX_LOAD_RETRIES = 2;
 
 export interface ChatHandle {
@@ -242,6 +242,14 @@ export default function Chat({
   const [attachError, setAttachError] = useState<string | null>(null);
   const [agentMode, setAgentMode] = useState(false);
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
+  const [researchMode, setResearchMode] = useState(false);
+  const [modeSwitching, setModeSwitching] = useState<"to-research" | "to-navo" | null>(null);
+  const [researchStatus, setResearchStatus] = useState<ResearchStep[]>([]);
+  const [researchScopeOpen, setResearchScopeOpen] = useState(false);
+  const [pendingResearchTopic, setPendingResearchTopic] = useState<string | null>(null);
+  const [pendingResearchConversationId, setPendingResearchConversationId] = useState<
+    number | null
+  >(null);
   const [micState, setMicState] = useState<"idle" | "recording" | "transcribing">("idle");
   const [micError, setMicError] = useState<string | null>(null);
   const [micProgress, setMicProgress] = useState<SpeechModelProgress | null>(null);
@@ -249,8 +257,6 @@ export default function Chat({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pendingReplyRef = useRef<string>("");
-  const flushScheduledRef = useRef(false);
   const autoLoadStartedRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -443,6 +449,87 @@ export default function Chat({
     }
   }
 
+  async function generateResearchReply(
+    activeConversationId: number,
+    topic: string,
+    answers: ResearchScopeAnswers
+  ) {
+    setStreaming(true);
+    setDraftReply("");
+    setResearchStatus([]);
+
+    // Broadened retrieval (higher k, lower threshold than normal chat's top-3/0.3)
+    // so research genuinely searches across saved context instead of just the
+    // handful of closest matches -- see the threshold param added to
+    // topRelevantEntries/topRelevantChunks/topRelevantMemories for this.
+    let contextBlock = "";
+    if (answers.useGrounding) {
+      const relevant = await topRelevantEntries(topic, journalEntries ?? [], 10, 0.15);
+      const notesBlock =
+        relevant.length > 0
+          ? `Relevant notes the user saved earlier:\n${relevant
+              .map((e) => `- ${e.text}`)
+              .join("\n")}\n\n`
+          : "";
+
+      const memoriesBlock = isMemoryEnabled()
+        ? buildMemoriesBlock(await topRelevantMemories(topic, 10, 0.15))
+        : "";
+
+      const fileChunks = attachedFile
+        ? await topRelevantChunks(topic, attachedFile.chunks, 10, 0.15)
+        : [];
+      const fileBlock =
+        fileChunks.length > 0
+          ? `Excerpts from the uploaded file "${attachedFile?.name}":\n${fileChunks
+              .map((c) => `- ${c}`)
+              .join("\n")}\n\n`
+          : "";
+
+      contextBlock = notesBlock + memoriesBlock + fileBlock;
+    }
+
+    try {
+      const { transcript } = await runResearch({
+        topic,
+        depth: answers.depth,
+        contextBlock,
+        userClarification: answers.clarification,
+        generate: generateOnce,
+        onSubQuestionStart: (i, question) => {
+          setResearchStatus((prev) => {
+            const next = [...prev];
+            next[i] = { question, state: "active" };
+            return next;
+          });
+        },
+        onSubQuestionDone: (i) => {
+          setResearchStatus((prev) => {
+            const next = [...prev];
+            if (next[i]) next[i] = { ...next[i], state: "done" };
+            return next;
+          });
+        },
+        onDelta: (text) => setDraftReply(text),
+      });
+
+      const full =
+        transcript.trim() || "Sorry, I didn't generate a research report there — please try again.";
+      await db.chat.add({
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: full,
+        createdAt: Date.now(),
+      });
+      await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
+    } finally {
+      setDraftReply("");
+      setResearchStatus([]);
+      setStreaming(false);
+      setLastStats(getLastGenerationStats());
+    }
+  }
+
   async function streamReply(
     promptMessages: ChatCompletionMessage[],
     activeConversationId: number,
@@ -459,72 +546,14 @@ export default function Chat({
     try {
       for (let step = 0; ; step++) {
         const prefix = transcriptParts.join("");
-        let full = "";
 
-        for (let attempt = 0; ; attempt++) {
-          pendingReplyRef.current = "";
-          full = "";
-          let lastChunkAt = performance.now();
-          let sawFirstChunk = false;
-          let watchdogFired = false;
-          const watchdog = setInterval(() => {
-            if (sawFirstChunk && performance.now() - lastChunkAt > STUCK_GENERATION_TIMEOUT_MS) {
-              watchdogFired = true;
-              abortGeneration();
-            }
-          }, 2000);
-
-          const scheduleFlush = () => {
-            if (flushScheduledRef.current) return;
-            flushScheduledRef.current = true;
-            requestAnimationFrame(() => {
-              setDraftReply(prefix + pendingReplyRef.current);
-              flushScheduledRef.current = false;
-            });
-          };
-
-          try {
-            for await (const chunk of streamChat(messages, { temperature: opts?.temperature })) {
-              sawFirstChunk = true;
-              lastChunkAt = performance.now();
-              full += chunk;
-              pendingReplyRef.current = full;
-              scheduleFlush();
-            }
-            clearInterval(watchdog);
-            if (watchdogFired) {
-              if (attempt < MAX_STUCK_RETRIES) continue;
-              console.error("Generation stalled with no response");
-              full = full || "Generation stalled — please try again.";
-            }
-            break;
-          } catch (err) {
-            clearInterval(watchdog);
-            if (watchdogFired && attempt < MAX_STUCK_RETRIES) {
-              continue;
-            }
-            if (watchdogFired) {
-              console.error("Generation stalled with no response", err);
-              full = full || "Generation stalled — please try again.";
-              break;
-            }
-            if (isEngineLostError(err)) {
-              console.error(err);
-              full =
-                full ||
-                "Your device unloaded the model to free up memory. Reloading it now — please try again in a moment.";
-              handleLoadModel(modelId);
-            } else if (isAbortError(err)) {
-              aborted = true;
-              full = full || "Stopped.";
-            } else {
-              console.error(err);
-              const detail = err instanceof Error ? err.message : String(err);
-              full = full || `Sorry, generation failed: ${detail}`;
-            }
-            break;
-          }
-        }
+        const result = await generateOnce(messages, {
+          temperature: opts?.temperature,
+          onDelta: (text) => setDraftReply(prefix + text),
+          onEngineLost: () => handleLoadModel(modelId),
+        });
+        const full = result.text;
+        if (result.aborted) aborted = true;
 
         const code =
           !aborted && opts?.allowAgent && step < MAX_AGENT_STEPS
@@ -582,7 +611,7 @@ export default function Chat({
 
   async function handleSend() {
     const text = input.trim();
-    if (!text || streaming || status !== "ready") return;
+    if (!text || streaming || status !== "ready" || researchScopeOpen) return;
 
     haptic("tap");
     setInput("");
@@ -605,6 +634,13 @@ export default function Chat({
       createdAt: Date.now(),
     });
 
+    if (researchMode) {
+      setPendingResearchTopic(text);
+      setPendingResearchConversationId(activeConversationId);
+      setResearchScopeOpen(true);
+      return;
+    }
+
     await generateReply(activeConversationId, text);
   }
 
@@ -624,6 +660,23 @@ export default function Chat({
   function handleStop() {
     haptic("tap");
     abortGeneration();
+  }
+
+  // Deliberate ~550ms transition beat (not real loading -- nothing async
+  // happens here) so switching mid-conversation reads as switching into a
+  // different app experience, not flipping a small option.
+  const MODE_SWITCH_TRANSITION_MS = 550;
+
+  function handleModeSwitch(mode: "navo" | "research") {
+    if (streaming || modeSwitching) return;
+    haptic("tap");
+    const toResearch = mode === "research";
+    setModeSwitching(toResearch ? "to-research" : "to-navo");
+    if (toResearch) setAgentMode(false);
+    setTimeout(() => {
+      setResearchMode(toResearch);
+      setModeSwitching(null);
+    }, MODE_SWITCH_TRANSITION_MS);
   }
 
   async function handleMicClick() {
@@ -830,6 +883,11 @@ export default function Chat({
             }}
             onBrowseMore={onBrowseModelHub}
           />
+          <ModeSwitch
+            active={researchMode ? "research" : "navo"}
+            onChange={handleModeSwitch}
+            disabled={streaming || modeSwitching !== null}
+          />
           <button
             type="button"
             className={`glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
@@ -929,6 +987,18 @@ export default function Chat({
       <InstallBanner storagePersisted={storagePersisted} />
 
       <div className="relative min-h-0 flex-1">
+      {modeSwitching && (
+        <div className="msg-enter absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-background/95 backdrop-blur-sm">
+          <span className="inline-flex gap-1.5">
+            <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:-0.3s]" />
+            <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:-0.15s]" />
+            <span className="h-2 w-2 animate-bounce rounded-full bg-accent" />
+          </span>
+          <p className="text-sm font-medium text-foreground-muted">
+            {modeSwitching === "to-research" ? "Switching to Navo Research…" : "Switching to Navo…"}
+          </p>
+        </div>
+      )}
       <div
         ref={scrollContainerRef}
         className="h-full overflow-y-auto px-3 sm:px-5"
@@ -982,6 +1052,11 @@ export default function Chat({
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
                         {agentStatus}
                       </p>
+                    )}
+                    {researchStatus.length > 0 && (
+                      <div className="mt-1">
+                        <ResearchProgress steps={researchStatus} />
+                      </div>
                     )}
                   </>
                 ) : (
@@ -1136,7 +1211,7 @@ export default function Chat({
                       : "glass-chip text-foreground-muted hover:text-foreground"
                   }`}
                   onClick={() => setAgentMode((v) => !v)}
-                  disabled={streaming}
+                  disabled={streaming || researchMode}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                     <path
@@ -1212,6 +1287,16 @@ export default function Chat({
           )}
         </div>
       </div>
+      <ResearchScopeModal
+        open={researchScopeOpen}
+        topic={pendingResearchTopic ?? ""}
+        onClose={() => setResearchScopeOpen(false)}
+        onStart={(answers) => {
+          if (pendingResearchConversationId !== null && pendingResearchTopic !== null) {
+            generateResearchReply(pendingResearchConversationId, pendingResearchTopic, answers);
+          }
+        }}
+      />
     </div>
   );
 }

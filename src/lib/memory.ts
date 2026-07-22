@@ -96,7 +96,11 @@ export async function saveExtractedMemories(userText: string): Promise<void> {
 }
 
 /** Recall the memories most relevant to the query, highest similarity first. */
-export async function topRelevantMemories(query: string, k = 3): Promise<string[]> {
+export async function topRelevantMemories(
+  query: string,
+  k = 3,
+  threshold = RETRIEVAL_THRESHOLD
+): Promise<string[]> {
   const memories = await db.memories.toArray();
   if (memories.length === 0) return [];
 
@@ -104,7 +108,7 @@ export async function topRelevantMemories(query: string, k = 3): Promise<string[
   return memories
     .filter((m): m is Memory & { embedding: number[] } => Array.isArray(m.embedding))
     .map((m) => ({ text: m.text, score: cosineSimilarity(queryEmbedding, m.embedding) }))
-    .filter((m) => m.score > RETRIEVAL_THRESHOLD)
+    .filter((m) => m.score > threshold)
     .sort((a, b) => b.score - a.score)
     .slice(0, k)
     .map((m) => m.text);

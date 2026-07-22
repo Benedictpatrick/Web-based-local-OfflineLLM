@@ -13,7 +13,8 @@ async function embeddingFor(entry: JournalEntry): Promise<number[]> {
 export async function topRelevantEntries(
   query: string,
   entries: JournalEntry[],
-  k = 3
+  k = 3,
+  threshold = SIMILARITY_THRESHOLD
 ): Promise<JournalEntry[]> {
   if (entries.length === 0) return [];
 
@@ -26,7 +27,7 @@ export async function topRelevantEntries(
   );
 
   return scored
-    .filter((s) => s.score > SIMILARITY_THRESHOLD)
+    .filter((s) => s.score > threshold)
     .sort((a, b) => b.score - a.score)
     .slice(0, k)
     .map((s) => s.entry);
@@ -44,14 +45,15 @@ export async function embedChunks(texts: string[]): Promise<TextChunk[]> {
 export async function topRelevantChunks(
   query: string,
   chunks: TextChunk[],
-  k = 3
+  k = 3,
+  threshold = SIMILARITY_THRESHOLD
 ): Promise<string[]> {
   if (chunks.length === 0) return [];
 
   const queryEmbedding = await embed(query);
   return chunks
     .map((c) => ({ text: c.text, score: cosineSimilarity(queryEmbedding, c.embedding) }))
-    .filter((c) => c.score > SIMILARITY_THRESHOLD)
+    .filter((c) => c.score > threshold)
     .sort((a, b) => b.score - a.score)
     .slice(0, k)
     .map((c) => c.text);
