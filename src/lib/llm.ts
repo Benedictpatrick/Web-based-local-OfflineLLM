@@ -239,8 +239,54 @@ export type GenerationStats = {
   tokensPerSec: number;
 };
 
+/** How long a load can go with zero progress-callback activity before it's
+ *  treated as stalled. Mobile networks are the main reason this exists: a
+ *  WiFi/cellular handoff or a backgrounded tab can leave a fetch neither
+ *  resolving nor rejecting, and without this, that hangs the app forever
+ *  (see withStallWatchdog below for why a plain timeout isn't enough). */
+export const STALL_TIMEOUT_MS = 20_000;
+
+export class LoadStalledError extends Error {
+  constructor() {
+    super("Loading stalled with no progress. This usually means a flaky connection.");
+    this.name = "LoadStalledError";
+  }
+}
+
+/**
+ * Races `run` against a "no progress for STALL_TIMEOUT_MS" watchdog, so a
+ * stalled fetch (common on mobile: network handoff, backgrounded tab) fails
+ * fast instead of hanging forever. `run` receives a `touch()` callback to
+ * invoke from its own progress handler to reset the stall clock.
+ *
+ * The underlying `run` promise cannot actually be cancelled -- there's no
+ * public API to abort a web-llm/wllama fetch -- so when the watchdog wins
+ * the race, that promise keeps running orphaned in the background. Callers
+ * must guard their own state writes with an attempt-id check so a late
+ * resolution from an abandoned attempt can't clobber a newer one.
+ */
+export function withStallWatchdog<T>(run: (touch: () => void) => Promise<T>): Promise<T> {
+  let lastProgressAt = performance.now();
+  const touch = () => {
+    lastProgressAt = performance.now();
+  };
+  const attempt = run(touch);
+  attempt.catch(() => {}); // mark handled so losing the race isn't an unhandled rejection
+  const watchdog = new Promise<never>((_, reject) => {
+    const interval = setInterval(() => {
+      if (performance.now() - lastProgressAt > STALL_TIMEOUT_MS) {
+        clearInterval(interval);
+        reject(new LoadStalledError());
+      }
+    }, 2000);
+    attempt.finally(() => clearInterval(interval));
+  });
+  return Promise.race([attempt, watchdog]);
+}
+
 let wllama: Wllama | null = null;
 let wllamaLoadingPromise: Promise<Wllama> | null = null;
+let wllamaAttemptId = 0;
 
 /**
  * Loads the wllama bundle on demand. It is only needed for the WASM fallback
@@ -254,6 +300,7 @@ function importWllama() {
 let webllmEngine: MLCEngine | null = null;
 let webllmLoadingPromise: Promise<MLCEngine> | null = null;
 let webllmMlcId: string | null = null;
+let webllmAttemptId = 0;
 
 let lastGenerationStats: GenerationStats | null = null;
 let loadedNCtx: number | null = null;
@@ -359,26 +406,39 @@ async function loadWebgpuEngine(
   }
   if (webllmLoadingPromise) return webllmLoadingPromise;
 
-  webllmLoadingPromise = (async () => {
-    try {
-      const webllm = await import("@mlc-ai/web-llm");
-      const engine = await webllm.CreateMLCEngine(mlcId, {
-        initProgressCallback: onProgress
-          ? (report) =>
-              onProgress({
-                loaded: Math.round(report.progress * 1000),
-                total: 1000,
-                text: report.text,
-              })
-          : undefined,
-      });
-      webllmEngine = engine;
-      webllmMlcId = mlcId;
-      return engine;
-    } finally {
-      webllmLoadingPromise = null;
-    }
-  })();
+  const myAttemptId = ++webllmAttemptId;
+
+  webllmLoadingPromise = withStallWatchdog((touch) =>
+    (async () => {
+      try {
+        const webllm = await import("@mlc-ai/web-llm");
+        const engine = await webllm.CreateMLCEngine(mlcId, {
+          initProgressCallback: (report) => {
+            touch();
+            onProgress?.({
+              loaded: Math.round(report.progress * 1000),
+              total: 1000,
+              text: report.text,
+            });
+          },
+        });
+        if (myAttemptId === webllmAttemptId) {
+          webllmEngine = engine;
+          webllmMlcId = mlcId;
+        }
+        return engine;
+      } finally {
+        if (myAttemptId === webllmAttemptId) webllmLoadingPromise = null;
+      }
+    })()
+  );
+
+  // If the watchdog wins the race, the finally above never runs (the real
+  // attempt is still hanging), so this is what actually frees the singleton
+  // for a fresh retry.
+  webllmLoadingPromise.catch(() => {
+    if (myAttemptId === webllmAttemptId) webllmLoadingPromise = null;
+  });
 
   return webllmLoadingPromise;
 }
@@ -401,51 +461,64 @@ async function loadWasmEngine(
     return wllamaLoadingPromise;
   }
 
-  wllamaLoadingPromise = (async () => {
-    if (wllama) {
-      await wllama.exit().catch(() => {});
-      wllama = null;
-    }
+  const myAttemptId = ++wllamaAttemptId;
 
-    const { Wllama } = await importWllama();
-    const instance = new Wllama(
-      { default: "/wllama/wllama.wasm" },
-      { allowOffline: true }
-    );
-
-    const isMobile = isMobileDevice();
-    const isLowMemory = isLowMemoryDevice();
-    const nCtx = isLowMemory ? 512 : isMobile ? 1024 : 2048;
-
-    const loadParams = {
-      n_ctx: nCtx,
-      n_batch: isLowMemory ? 64 : isMobile ? 128 : undefined,
-      n_threads: isMobile ? 1 : undefined,
-      progressCallback: onProgress
-        ? ({ loaded, total }: { loaded: number; total: number }) =>
-            onProgress({ loaded, total })
-        : undefined,
-    };
-
-    try {
-      try {
-        await instance.loadModelFromHF({ repo, file }, loadParams);
-      } catch (err) {
-        const isStaleCacheError =
-          err instanceof Error && /model file not found/i.test(err.message);
-        if (!isStaleCacheError) throw err;
-
-        await instance.cacheManager.clear().catch(() => {});
-        await instance.loadModelFromHF({ repo, file }, loadParams);
+  wllamaLoadingPromise = withStallWatchdog((touch) =>
+    (async () => {
+      if (wllama) {
+        await wllama.exit().catch(() => {});
+        wllama = null;
       }
 
-      wllama = instance;
-      loadedNCtx = nCtx;
-      return instance;
-    } finally {
-      wllamaLoadingPromise = null;
-    }
-  })();
+      const { Wllama } = await importWllama();
+      const instance = new Wllama(
+        { default: "/wllama/wllama.wasm" },
+        { allowOffline: true }
+      );
+
+      const isMobile = isMobileDevice();
+      const isLowMemory = isLowMemoryDevice();
+      const nCtx = isLowMemory ? 512 : isMobile ? 1024 : 2048;
+
+      const loadParams = {
+        n_ctx: nCtx,
+        n_batch: isLowMemory ? 64 : isMobile ? 128 : undefined,
+        n_threads: isMobile ? 1 : undefined,
+        progressCallback: ({ loaded, total }: { loaded: number; total: number }) => {
+          touch();
+          onProgress?.({ loaded, total });
+        },
+      };
+
+      try {
+        try {
+          await instance.loadModelFromHF({ repo, file }, loadParams);
+        } catch (err) {
+          const isStaleCacheError =
+            err instanceof Error && /model file not found/i.test(err.message);
+          if (!isStaleCacheError) throw err;
+
+          await instance.cacheManager.clear().catch(() => {});
+          await instance.loadModelFromHF({ repo, file }, loadParams);
+        }
+
+        if (myAttemptId === wllamaAttemptId) {
+          wllama = instance;
+          loadedNCtx = nCtx;
+        }
+        return instance;
+      } finally {
+        if (myAttemptId === wllamaAttemptId) wllamaLoadingPromise = null;
+      }
+    })()
+  );
+
+  // If the watchdog wins the race, the finally above never runs (the real
+  // attempt is still hanging), so this is what actually frees the singleton
+  // for a fresh retry.
+  wllamaLoadingPromise.catch(() => {
+    if (myAttemptId === wllamaAttemptId) wllamaLoadingPromise = null;
+  });
 
   return wllamaLoadingPromise;
 }
