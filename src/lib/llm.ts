@@ -2,7 +2,7 @@ import type {
   Wllama,
   ChatCompletionMessage,
 } from "@wllama/wllama/esm/index.js";
-import type { MLCEngine } from "@mlc-ai/web-llm";
+import type { ChatOptions as WebllmChatOptions, MLCEngine } from "@mlc-ai/web-llm";
 import type { Provider } from "@/lib/brandIcons";
 
 const HF_BASE = "https://huggingface.co";
@@ -408,6 +408,17 @@ export async function loadEngine(
   loadedModelId = modelId;
 }
 
+/** Per-model ChatOptions overrides for models whose bundled web-llm config is
+ *  broken as shipped. Gemma 3 1B's downloaded mlc-chat-config.json sets a
+ *  positive sliding_window_size on top of web-llm's own context_window_size
+ *  override, and the engine refuses to start with both positive: "Only one
+ *  of context_window_size and sliding_window_size can be positive." Forcing
+ *  the sliding window off keeps the full context_window_size in effect, per
+ *  the fix the error message itself suggests. */
+const CHAT_OPTS_OVERRIDES: Partial<Record<string, WebllmChatOptions>> = {
+  "gemma3-1b-it-q4f16_1-MLC": { sliding_window_size: -1 },
+};
+
 async function loadWebgpuEngine(
   mlcId: string,
   onProgress?: (progress: ProgressInfo) => void
@@ -424,16 +435,20 @@ async function loadWebgpuEngine(
     (async () => {
       try {
         const webllm = await import("@mlc-ai/web-llm");
-        const engine = await webllm.CreateMLCEngine(mlcId, {
-          initProgressCallback: (report) => {
-            touch();
-            onProgress?.({
-              loaded: Math.round(report.progress * 1000),
-              total: 1000,
-              text: report.text,
-            });
+        const engine = await webllm.CreateMLCEngine(
+          mlcId,
+          {
+            initProgressCallback: (report) => {
+              touch();
+              onProgress?.({
+                loaded: Math.round(report.progress * 1000),
+                total: 1000,
+                text: report.text,
+              });
+            },
           },
-        });
+          CHAT_OPTS_OVERRIDES[mlcId]
+        );
         if (myAttemptId === webllmAttemptId) {
           webllmEngine = engine;
           webllmMlcId = mlcId;
