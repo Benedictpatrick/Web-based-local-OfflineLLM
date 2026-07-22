@@ -1,9 +1,11 @@
 /** Renders a shareable PNG "benchmark card" for the last chat reply: model,
- *  engine, tokens/sec, and rough device specs, branded so it's recognizable
- *  if shared outside the app. Pure client-side canvas drawing, no network. */
+ *  engine, tokens/sec, and rough device specs, styled like real terminal
+ *  output rather than a generic marketing card. Pure client-side canvas
+ *  drawing, no network. */
 
 const CARD_WIDTH = 1200;
 const CARD_HEIGHT = 630;
+const PADDING = 56;
 
 export type BenchmarkCardData = {
   modelName: string;
@@ -13,13 +15,42 @@ export type BenchmarkCardData = {
   memoryGb: number | null;
 };
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
+const MONO_FALLBACK =
+  'ui-monospace, "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", monospace';
+
+/** next/font generates a real (hashed) font-family name and exposes it only
+ *  through this CSS variable -- there's no static string to reference, and
+ *  canvas text ignores the font unless this exact family list is used. */
+function monoFontFamily(): string {
+  if (typeof document === "undefined") return MONO_FALLBACK;
+  const generated = getComputedStyle(document.documentElement)
+    .getPropertyValue("--font-geist-mono")
+    .trim();
+  return generated ? `${generated}, ${MONO_FALLBACK}` : MONO_FALLBACK;
+}
+
+/** Canvas silently falls back to a default font if the requested one hasn't
+ *  actually finished loading yet -- unlike DOM text, it doesn't wait. Geist
+ *  Mono may never have been used on screen (e.g. no code block shown yet),
+ *  so it isn't necessarily loaded just because the page is. */
+async function ensureMonoFontReady(family: string): Promise<void> {
+  if (typeof document === "undefined" || !("fonts" in document)) return;
+  try {
+    await Promise.all([
+      document.fonts.load(`400 16px ${family}`),
+      document.fonts.load(`600 16px ${family}`),
+      document.fonts.load(`700 16px ${family}`),
+    ]);
+    await document.fonts.ready;
+  } catch {
+    // Falls back to whatever the browser picks -- still legible.
+  }
+}
+
+/** Right-pads with spaces to a fixed character count so key/value columns
+ *  line up like real terminal output. Assumes a monospace font is active. */
+function padKey(key: string, width: number): string {
+  return key + " ".repeat(Math.max(1, width - key.length));
 }
 
 export async function renderBenchmarkCard(data: BenchmarkCardData): Promise<Blob | null> {
@@ -29,72 +60,94 @@ export async function renderBenchmarkCard(data: BenchmarkCardData): Promise<Blob
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
+  const mono = monoFontFamily();
+  await ensureMonoFontReady(mono);
+
+  const bg = "#0a0a0a";
+  const chrome = "#1c1c1c";
   const accent = "#10a37f";
-  const background = "#171717";
-  const foreground = "#f7f7f7";
-  const muted = "#8e8ea0";
+  const foreground = "#e8e8e8";
+  const muted = "#6b6b6b";
+  const prompt = "#5ec9a0";
 
-  ctx.fillStyle = background;
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
-  const glow = ctx.createRadialGradient(
-    CARD_WIDTH / 2,
-    CARD_HEIGHT * 0.32,
-    0,
-    CARD_WIDTH / 2,
-    CARD_HEIGHT * 0.32,
-    CARD_WIDTH * 0.55,
-  );
-  glow.addColorStop(0, "rgba(16, 163, 127, 0.16)");
-  glow.addColorStop(1, "rgba(16, 163, 127, 0)");
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-
-  try {
-    const wordmark = await loadImage("/navo-wordmark.png");
-    const wmHeight = 44;
-    const wmWidth = (wordmark.width / wordmark.height) * wmHeight;
-    ctx.drawImage(wordmark, 64, 56, wmWidth, wmHeight);
-  } catch {
-    ctx.fillStyle = accent;
-    ctx.font = "bold 36px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.fillText("Navo", 64, 92);
-  }
-
+  // Terminal window chrome: title bar with traffic-light dots, the most
+  // recognizable, lowest-effort signal of "this is a terminal."
+  const barHeight = 44;
+  ctx.fillStyle = chrome;
+  ctx.fillRect(0, 0, CARD_WIDTH, barHeight);
+  const dotColors = ["#ff5f57", "#febc2e", "#28c840"];
+  dotColors.forEach((color, i) => {
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.arc(28 + i * 24, barHeight / 2, 6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.fillStyle = muted;
+  ctx.font = `400 14px ${mono}`;
   ctx.textAlign = "center";
+  ctx.fillText("guest@navo:~", CARD_WIDTH / 2, barHeight / 2 + 5);
+  ctx.textAlign = "left";
 
+  let y = barHeight + 64;
+  const x = PADDING;
+
+  ctx.font = `400 22px ${mono}`;
+  ctx.fillStyle = prompt;
+  ctx.fillText("guest@navo", x, y);
+  const promptWidth = ctx.measureText("guest@navo").width;
   ctx.fillStyle = muted;
-  ctx.font = "600 26px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText("tokens per second", CARD_WIDTH / 2, 260);
-
-  ctx.fillStyle = accent;
-  ctx.font = "bold 150px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText(data.tokensPerSec.toFixed(1), CARD_WIDTH / 2, 400);
-
+  ctx.fillText(":~$ ", x + promptWidth, y);
+  const prefixWidth = promptWidth + ctx.measureText(":~$ ").width;
   ctx.fillStyle = foreground;
-  ctx.font = "600 32px system-ui, -apple-system, Segoe UI, sans-serif";
-  const engineLabel =
-    data.engine === "webgpu" ? "WebGPU (GPU)" : data.engine === "wasm" ? "WASM (CPU)" : "";
-  ctx.fillText(
-    engineLabel ? `${data.modelName} · ${engineLabel}` : data.modelName,
-    CARD_WIDTH / 2,
-    460,
-  );
+  ctx.fillText("./benchmark.sh", x + prefixWidth, y);
 
-  const specParts: string[] = [];
-  if (data.cores) specParts.push(`${data.cores} cores`);
-  if (data.memoryGb) specParts.push(`~${data.memoryGb}GB RAM`);
-  if (specParts.length) {
-    ctx.fillStyle = muted;
-    ctx.font = "24px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.fillText(specParts.join(" · "), CARD_WIDTH / 2, 500);
+  y += 56;
+  const charWidth = ctx.measureText("0").width;
+  const keyColWidth = 11; // chars
+
+  const rows: [string, string, string?][] = [
+    ["model", data.modelName],
+    ["engine", data.engine === "webgpu" ? "WebGPU (GPU)" : data.engine === "wasm" ? "WASM (CPU)" : "—"],
+  ];
+  if (data.cores || data.memoryGb) {
+    const specParts: string[] = [];
+    if (data.cores) specParts.push(`${data.cores} cores`);
+    if (data.memoryGb) specParts.push(`~${data.memoryGb}GB RAM`);
+    rows.push(["device", specParts.join(", ")]);
   }
 
-  ctx.fillStyle = muted;
-  ctx.font = "500 24px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText("Private, offline AI in your browser — navoai.space", CARD_WIDTH / 2, 570);
+  ctx.font = `400 24px ${mono}`;
+  for (const [key, value] of rows) {
+    ctx.fillStyle = muted;
+    ctx.fillText(padKey(key, keyColWidth), x, y);
+    ctx.fillStyle = foreground;
+    ctx.fillText(value, x + charWidth * keyColWidth, y);
+    y += 40;
+  }
 
-  ctx.textAlign = "left";
+  // tok/s gets its own oversized line -- the one number this card exists to
+  // show off -- instead of blending in with the other rows.
+  y += 28;
+  ctx.font = `700 22px ${mono}`;
+  ctx.fillStyle = muted;
+  ctx.fillText(padKey("tok/s", keyColWidth), x, y);
+  ctx.font = `700 96px ${mono}`;
+  ctx.fillStyle = accent;
+  ctx.fillText(data.tokensPerSec.toFixed(1), x + charWidth * keyColWidth, y + 8);
+
+  // Blinking-cursor block after the number, like output still "printing."
+  const numberWidth = ctx.measureText(data.tokensPerSec.toFixed(1)).width;
+  ctx.fillStyle = accent;
+  ctx.fillRect(x + charWidth * keyColWidth + numberWidth + 12, y - 66, 30, 74);
+
+  ctx.font = `400 20px ${mono}`;
+  ctx.fillStyle = muted;
+  ctx.fillText("# private, offline AI — runs entirely in your browser", x, CARD_HEIGHT - 68);
+  ctx.fillStyle = accent;
+  ctx.fillText("navoai.space", x, CARD_HEIGHT - 40);
 
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
 }
