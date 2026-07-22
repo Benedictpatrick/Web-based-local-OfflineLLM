@@ -41,6 +41,7 @@ import InstallBanner from "@/components/InstallBanner";
 import ResearchScopeModal, { type ResearchScopeAnswers } from "@/components/ResearchScopeModal";
 import ResearchProgress, { type ResearchStep } from "@/components/ResearchProgress";
 import ModeSwitch from "@/components/ModeSwitch";
+import ResearchSplash from "@/components/ResearchSplash";
 
 // react-markdown + katex + the syntax-highlighter's language grammars are
 // ~650KB on their own and aren't needed until a message actually renders, so
@@ -662,10 +663,11 @@ export default function Chat({
     abortGeneration();
   }
 
-  // Deliberate ~550ms transition beat (not real loading -- nothing async
-  // happens here) so switching mid-conversation reads as switching into a
-  // different app experience, not flipping a small option.
-  const MODE_SWITCH_TRANSITION_MS = 550;
+  // Entering Navo Research gets the full 5s branded splash (ResearchSplash);
+  // returning to plain Navo keeps the quick ~550ms beat -- there's nothing to
+  // announce on the way back, so a matching 5s hold would just feel slow.
+  const TO_RESEARCH_TRANSITION_MS = 5000;
+  const TO_NAVO_TRANSITION_MS = 550;
 
   function handleModeSwitch(mode: "navo" | "research") {
     if (streaming || modeSwitching) return;
@@ -673,10 +675,13 @@ export default function Chat({
     const toResearch = mode === "research";
     setModeSwitching(toResearch ? "to-research" : "to-navo");
     if (toResearch) setAgentMode(false);
-    setTimeout(() => {
-      setResearchMode(toResearch);
-      setModeSwitching(null);
-    }, MODE_SWITCH_TRANSITION_MS);
+    setTimeout(
+      () => {
+        setResearchMode(toResearch);
+        setModeSwitching(null);
+      },
+      toResearch ? TO_RESEARCH_TRANSITION_MS : TO_NAVO_TRANSITION_MS
+    );
   }
 
   async function handleMicClick() {
@@ -869,77 +874,87 @@ export default function Chat({
   return (
     <div className="flex h-full flex-col">
       <div className="px-3 py-2 text-xs text-foreground-muted sm:px-5">
-        <div className="flex items-center justify-between gap-2">
-          <ModelPicker
-            variant="chip"
-            value={modelId}
-            disabled={streaming}
-            onChange={(id) => {
-              setModelId(id);
-              handleLoadModel(id);
-            }}
-            onModelDeleted={(id) => {
-              if (id === modelId) setProgress("");
-            }}
-            onBrowseMore={onBrowseModelHub}
-          />
-          <ModeSwitch
-            active={researchMode ? "research" : "navo"}
-            onChange={handleModeSwitch}
-            disabled={streaming || modeSwitching !== null}
-          />
-          <button
-            type="button"
-            className={`glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
-            onClick={() => setShowStats((v) => !v)}
-            aria-expanded={showStats}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
-              <path
-                d="M4 20V10M10 20V4M16 20v-7M22 20H2"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Stats
-          </button>
-          {lastStats && (
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <div className="min-w-0 justify-self-start">
+            <ModelPicker
+              variant="chip"
+              value={modelId}
+              disabled={streaming}
+              onChange={(id) => {
+                setModelId(id);
+                handleLoadModel(id);
+              }}
+              onModelDeleted={(id) => {
+                if (id === modelId) setProgress("");
+              }}
+              onBrowseMore={onBrowseModelHub}
+            />
+          </div>
+          {/* Its own grid column (not just a flex sibling) so it stays dead-center
+              regardless of how many chips show up on either side -- the share chip
+              below only appears once a reply has finished, and a plain flex row
+              with justify-between would drag this off-center when that happens. */}
+          <div className="justify-self-center">
+            <ModeSwitch
+              active={researchMode ? "research" : "navo"}
+              onChange={handleModeSwitch}
+              disabled={streaming || modeSwitching !== null}
+            />
+          </div>
+          <div className="flex items-center justify-self-end gap-2">
             <button
               type="button"
-              className="glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground disabled:opacity-50"
-              disabled={sharingCard}
-              onClick={async () => {
-                haptic("tap");
-                setSharingCard(true);
-                try {
-                  const selected = AVAILABLE_MODELS.find((m) => m.id === modelId);
-                  const device = getDeviceInfo();
-                  await shareOrDownloadBenchmarkCard({
-                    modelName: selected ? modelDisplayParts(selected).name : modelId,
-                    engine: lastStats.engine,
-                    tokensPerSec: lastStats.tokensPerSec,
-                    cores: device.cores,
-                    memoryGb: device.memoryGb,
-                  });
-                } finally {
-                  setSharingCard(false);
-                }
-              }}
+              className={`glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
+              onClick={() => setShowStats((v) => !v)}
+              aria-expanded={showStats}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
                 <path
-                  d="M12 4v12M12 4 7 9m5-5 5 5M5 20h14"
+                  d="M4 20V10M10 20V4M16 20v-7M22 20H2"
                   stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               </svg>
-              {sharingCard ? "Sharing…" : "Share"}
+              Stats
             </button>
-          )}
+            {lastStats && (
+              <button
+                type="button"
+                className="glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground disabled:opacity-50"
+                disabled={sharingCard}
+                onClick={async () => {
+                  haptic("tap");
+                  setSharingCard(true);
+                  try {
+                    const selected = AVAILABLE_MODELS.find((m) => m.id === modelId);
+                    const device = getDeviceInfo();
+                    await shareOrDownloadBenchmarkCard({
+                      modelName: selected ? modelDisplayParts(selected).name : modelId,
+                      engine: lastStats.engine,
+                      tokensPerSec: lastStats.tokensPerSec,
+                      cores: device.cores,
+                      memoryGb: device.memoryGb,
+                    });
+                  } finally {
+                    setSharingCard(false);
+                  }
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                  <path
+                    d="M12 4v12M12 4 7 9m5-5 5 5M5 20h14"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {sharingCard ? "Sharing…" : "Share"}
+              </button>
+            )}
+          </div>
         </div>
         <div
           className={`overflow-hidden transition-[max-height,opacity] duration-500 ease-out ${
@@ -987,16 +1002,15 @@ export default function Chat({
       <InstallBanner storagePersisted={storagePersisted} />
 
       <div className="relative min-h-0 flex-1">
-      {modeSwitching && (
+      {modeSwitching === "to-research" && <ResearchSplash />}
+      {modeSwitching === "to-navo" && (
         <div className="msg-enter absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-background/95 backdrop-blur-sm">
           <span className="inline-flex gap-1.5">
             <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:-0.3s]" />
             <span className="h-2 w-2 animate-bounce rounded-full bg-accent [animation-delay:-0.15s]" />
             <span className="h-2 w-2 animate-bounce rounded-full bg-accent" />
           </span>
-          <p className="text-sm font-medium text-foreground-muted">
-            {modeSwitching === "to-research" ? "Switching to Navo Research…" : "Switching to Navo…"}
-          </p>
+          <p className="text-sm font-medium text-foreground-muted">Switching to Navo…</p>
         </div>
       )}
       <div

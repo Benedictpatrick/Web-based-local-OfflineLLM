@@ -158,6 +158,73 @@ body {
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
+/* The 5s Navo Research entrance splash (ResearchSplash.tsx). Deliberately a
+ * flat black background regardless of light/dark theme -- it's a branded
+ * splash moment, not themed chrome, matching the fixed black/green artwork
+ * it's built from. Percentages line up with the component's 5000ms duration:
+ * ~300ms in, hold, ~400ms out for the overlay; wordmark and label/underline
+ * choreographed in sequence over the first ~1.8s. */
+@keyframes research-splash-overlay {
+  0% { opacity: 0; }
+  6% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes research-splash-wordmark {
+  0% { opacity: 0; transform: scale(0.88); }
+  16% { opacity: 1; transform: scale(1); }
+  92% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.03); }
+}
+
+@keyframes research-splash-label {
+  0%, 22% { opacity: 0; transform: translateY(8px); }
+  34% { opacity: 1; transform: translateY(0); }
+  92% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+
+@keyframes research-splash-underline {
+  0%, 22% { width: 0; opacity: 0; }
+  36% { width: 40px; opacity: 1; }
+  92% { width: 40px; opacity: 1; }
+  100% { width: 40px; opacity: 0; }
+}
+
+.research-splash {
+  background: #000;
+  animation: research-splash-overlay 5000ms ease-in-out forwards;
+}
+
+.research-splash__wordmark {
+  opacity: 0;
+  animation: research-splash-wordmark 5000ms ease-out forwards;
+}
+
+.research-splash__label {
+  opacity: 0;
+  animation: research-splash-label 5000ms ease-out forwards;
+}
+
+.research-splash__underline {
+  width: 0;
+  animation: research-splash-underline 5000ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .research-splash,
+  .research-splash__wordmark,
+  .research-splash__label,
+  .research-splash__underline {
+    animation: none;
+    opacity: 1;
+  }
+  .research-splash__underline {
+    width: 40px;
+  }
+}
+
 .glass-bar {
   background: color-mix(in srgb, var(--background) 72%, transparent);
   backdrop-filter: blur(16px) saturate(160%);
