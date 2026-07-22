@@ -48,13 +48,25 @@ for (const [name, syntax] of [
   SyntaxHighlighter.registerLanguage(name, syntax);
 }
 
-function normalizeMathDelimiters(markdown: string): string {
+// Models write plain currency amounts as "$3,500 - $5,000" with no LaTeX
+// intent at all. remark-math treats any two bare $ as an inline-math pair,
+// so it swallows the whole range and KaTeX renders "3,500 − 5,000" with the
+// dollar signs stripped. Escape a $...$ pair here (before remark ever sees
+// it) only when the content between the delimiters is pure digits/punctuation
+// -- real LaTeX math always has a letter, backslash command, or operator in
+// there, so this can't misfire on genuine math the MATH_INSTRUCTIONS prompt
+// asked for.
+function escapeCurrencyDollarPairs(text: string): string {
+  return text.replace(/\$(?=\d)([\d,.\t -]*?)\$(?=\d)/g, (_, body) => `\\$${body}\\$`);
+}
+
+export function normalizeMathDelimiters(markdown: string): string {
   return markdown
     .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
     .map((segment, i) =>
       i % 2 === 1
         ? segment
-        : segment
+        : escapeCurrencyDollarPairs(segment)
             .replace(
               /\\\[([\s\S]+?)\\\]/g,
               (_, body) => `\n\n$$\n${body.trim()}\n$$\n\n`
