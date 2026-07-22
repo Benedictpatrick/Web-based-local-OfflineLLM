@@ -28,6 +28,7 @@ import {
   buildMemoriesBlock,
   topRelevantMemories,
   saveExtractedMemories,
+  getUserName,
 } from "@/lib/memory";
 import { extractTextFromFile, chunkText } from "@/lib/fileExtraction";
 import { extractSolePythonBlock } from "@/lib/agentCode";
@@ -258,6 +259,7 @@ export default function Chat({
   const [pendingResearchConversationId, setPendingResearchConversationId] = useState<
     number | null
   >(null);
+  const [userName, setUserNameState] = useState<string | null>(null);
   const [micState, setMicState] = useState<"idle" | "recording" | "transcribing">("idle");
   const [micError, setMicError] = useState<string | null>(null);
   const [micProgress, setMicProgress] = useState<SpeechModelProgress | null>(null);
@@ -296,6 +298,16 @@ export default function Chat({
   useEffect(() => {
     return () => {
       if (statusDetailTimeoutRef.current) clearTimeout(statusDetailTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getUserName().then((name) => {
+      if (!cancelled) setUserNameState(name);
+    });
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -1033,7 +1045,13 @@ export default function Chat({
           {(messages ?? []).length === 0 && !streaming && (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
               <p className="text-sm text-foreground-muted">
-                {researchMode ? "What do you want to research?" : "Ask anything to get started."}
+                {researchMode
+                  ? userName
+                    ? `What do you want to research, ${userName}?`
+                    : "What do you want to research?"
+                  : userName
+                    ? `Hey ${userName}, ask anything to get started.`
+                    : "Ask anything to get started."}
               </p>
               <div className="flex flex-wrap justify-center gap-2 px-2">
                 {(researchMode ? RESEARCH_EXAMPLE_PROMPTS : EXAMPLE_PROMPTS).map((prompt) => (

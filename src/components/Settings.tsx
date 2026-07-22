@@ -12,7 +12,7 @@ import {
   modelDisplayParts,
   type ModelId,
 } from "@/lib/llm";
-import { isMemoryEnabled, setMemoryEnabled } from "@/lib/memory";
+import { getUserName, isMemoryEnabled, setMemoryEnabled, setUserName } from "@/lib/memory";
 import { getThemePreference, setThemePreference, type ThemePreference } from "@/lib/theme";
 import { useInstallPrompt } from "@/lib/useInstallPrompt";
 import BrandMark from "@/components/BrandMark";
@@ -116,6 +116,8 @@ export default function Settings({
   // Start from the server-safe default so hydration matches, then correct to the
   // stored preference after mount (deferred so it doesn't run during the effect).
   const [memoryOn, setMemoryOn] = useState(true);
+  const [savedName, setSavedName] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState("");
   const memories = useLiveQuery(() => db.memories.orderBy("createdAt").reverse().toArray(), [], []);
   const notes = useLiveQuery(() => db.journal.orderBy("createdAt").reverse().toArray(), [], []);
   const [noteDraft, setNoteDraft] = useState("");
@@ -130,6 +132,26 @@ export default function Settings({
     });
     return () => cancelAnimationFrame(id);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getUserName().then((name) => {
+      if (cancelled) return;
+      setSavedName(name);
+      setNameDraft(name ?? "");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function handleSaveName() {
+    haptic("tap");
+    const trimmed = nameDraft.trim();
+    setUserName(trimmed || null);
+    setSavedName(trimmed || null);
+    setNameDraft(trimmed);
+  }
 
   function handleThemeChange(next: ThemePreference) {
     setTheme(next);
@@ -225,6 +247,35 @@ export default function Settings({
   return (
     <div className="h-full overflow-y-auto px-3 sm:px-5">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 py-6">
+        <SectionCard title="Profile">
+          <Row
+            label="Your name"
+            description="Shown in Navo's greeting when you start a new chat."
+            action={
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveName();
+                  }}
+                  placeholder="Add your name"
+                  className="w-28 rounded-full border border-border bg-background px-3 py-1.5 text-xs outline-none placeholder:text-foreground-muted sm:w-36"
+                />
+                <button
+                  type="button"
+                  className="rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+                  onClick={handleSaveName}
+                  disabled={nameDraft.trim() === (savedName ?? "")}
+                >
+                  Save
+                </button>
+              </div>
+            }
+          />
+        </SectionCard>
+
         <SectionCard title="Appearance">
           <Row
             label="Theme"

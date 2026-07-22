@@ -9,6 +9,10 @@ const DEDUP_THRESHOLD = 0.9;
  *  proven notes threshold in retrieval.ts so recall behaves the same as notes. */
 const RETRIEVAL_THRESHOLD = 0.3;
 const MEMORY_SETTING_KEY = "navo-memory";
+const USER_NAME_KEY = "navo-user-name";
+/** Matches the exact wording the "my name is"/"call me" patterns below produce,
+ *  so a name learned from chat can be recalled without an embedding lookup. */
+const NAME_MEMORY_RE = /^The user(?:'s name is|goes by)\s+(.+?)\.$/;
 
 /** Sentences that mention these are too fleeting to store as durable facts. */
 const TRANSIENT_RE =
@@ -67,6 +71,29 @@ export function isMemoryEnabled(): boolean {
 export function setMemoryEnabled(on: boolean): void {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(MEMORY_SETTING_KEY, on ? "on" : "off");
+}
+
+/** The name to greet the user by: an explicit Settings value first (fast,
+ *  always available), falling back to whatever "my name is"/"call me" already
+ *  learned from chat -- so telling Navo your name once is enough either way. */
+export async function getUserName(): Promise<string | null> {
+  if (typeof localStorage !== "undefined") {
+    const stored = localStorage.getItem(USER_NAME_KEY);
+    if (stored) return stored;
+  }
+  const memories = await db.memories.orderBy("createdAt").reverse().toArray();
+  for (const m of memories) {
+    const match = m.text.match(NAME_MEMORY_RE);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+export function setUserName(name: string | null): void {
+  if (typeof localStorage === "undefined") return;
+  const trimmed = name?.trim();
+  if (trimmed) localStorage.setItem(USER_NAME_KEY, trimmed);
+  else localStorage.removeItem(USER_NAME_KEY);
 }
 
 /** Extract, embed, dedupe, and store any new memories from a user message. Meant to
