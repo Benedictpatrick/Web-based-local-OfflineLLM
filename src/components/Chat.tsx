@@ -151,6 +151,18 @@ const MATH_INSTRUCTIONS =
 const MATH_RE =
   /\b(math|maths|equation|formula|solve|calculate|calculus|algebra|geometry|probability|matrix|matrices|logarithm|derivative|integral|summation|theorem|proof|big-?o)\b/i;
 
+// Answered directly, bypassing the model entirely: small models are
+// unreliable at repeating a fact injected via the system prompt (see the
+// MATH_RE/memory work elsewhere in this file), so a founder question gets a
+// fixed, correct answer instead of hoping the model gets it right.
+const FOUNDER_ANSWER = "Navo AI was founded by Benedict Patrick and Saidharshan.";
+
+// The "you" branch requires end-of-message (not just a word boundary) so
+// "who made you happy/laugh/say that" isn't hijacked into a founder answer --
+// nobody says "who made Navo happy", so only the bare pronoun is ambiguous.
+const FOUNDER_RE =
+  /\bwho\s+(made|makes|builds?|built|creates?|created|founded|founds?|develops?|developed|designed|designs?|owns?|runs?|is\s+behind)\s+(navo(?:\s+ai)?\b|you(?=[\s?.!,]*$))|\b(navo(?:\s+ai)?|your)\s*'?s?\s+(founder|creator|maker|owner|developer)s?\b|\b(founder|creator|maker|owner|developer)s?\s+of\s+(navo(?:\s+ai)?|you)\b/i;
+
 const SMALL_TALK_PROMPT =
   "You are Navo, a friendly private offline AI assistant. The user is greeting you or making small talk. Reply with one short, warm sentence that answers them and invites a question.";
 
@@ -356,6 +368,17 @@ export default function Chat({
   }
 
   async function generateReply(activeConversationId: number, userText: string) {
+    if (FOUNDER_RE.test(userText)) {
+      await db.chat.add({
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: FOUNDER_ANSWER,
+        createdAt: Date.now(),
+      });
+      await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
+      return;
+    }
+
     if (SMALL_TALK_RE.test(userText.trim())) {
       await streamReply([
         { role: "system", content: SMALL_TALK_PROMPT },
