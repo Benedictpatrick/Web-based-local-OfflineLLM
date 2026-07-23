@@ -486,10 +486,18 @@ export default function Chat({
       }
     );
 
-    // Learn durable facts from the user's message after the reply has streamed,
-    // so it never delays the first token. Fire and forget; failures are ignored.
+    // Learn durable facts (and any correction to Navo's last reply) from the
+    // user's message after the reply has streamed, so it never delays the
+    // first token. Fire and forget; failures are ignored. `history`'s last
+    // entry is the message just sent, so the one before it -- if an assistant
+    // reply -- is what a correction like "no, actually..." would be about.
     if (isMemoryEnabled()) {
-      void saveExtractedMemories(userText).catch(() => {});
+      const priorMessage = history.length >= 2 ? history[history.length - 2] : null;
+      const priorAssistantText =
+        priorMessage?.role === "assistant" && typeof priorMessage.content === "string"
+          ? priorMessage.content
+          : null;
+      void saveExtractedMemories(userText, priorAssistantText).catch(() => {});
     }
   }
 

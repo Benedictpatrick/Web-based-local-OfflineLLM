@@ -27,6 +27,7 @@ vi.mock("./db", () => ({
 
 import {
   extractMemories,
+  extractCorrection,
   buildMemoriesBlock,
   saveExtractedMemories,
   topRelevantMemories,
@@ -59,6 +60,33 @@ describe("extractMemories", () => {
 
   it("returns nothing for small talk", () => {
     expect(extractMemories("hey there, how's it going?")).toEqual([]);
+  });
+});
+
+describe("extractCorrection", () => {
+  it("captures a correction and folds in the reply it corrects", () => {
+    expect(
+      extractCorrection(
+        "No, the capital of Australia is Canberra, not Sydney.",
+        "The capital of Australia is Sydney."
+      )
+    ).toBe(
+      'Navo previously said "The capital of Australia is Sydney." -- the user corrected this: the capital of Australia is Canberra, not Sydney.'
+    );
+  });
+
+  it("still records the correction with no prior reply available", () => {
+    expect(extractCorrection("Actually, it's 42.", null)).toBe(
+      "The user corrected Navo: it's 42."
+    );
+  });
+
+  it("ignores ordinary messages that don't flag a correction", () => {
+    expect(extractCorrection("What's the capital of Australia?", "Sydney.")).toBeNull();
+  });
+
+  it("ignores small talk that happens to start with a signal word", () => {
+    expect(extractCorrection("no", "Sydney.")).toBeNull();
   });
 });
 
