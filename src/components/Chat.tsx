@@ -286,7 +286,12 @@ export default function Chat({
       bottomRef.current?.scrollIntoView({ behavior: "auto" });
       setShowScrollButton(false);
     }
-  }, [messages, draftReply]);
+    // researchStatus is included because a sub-question's "searching" pill and
+    // source pills append to the DOM independently of draftReply -- e.g. right
+    // when a new sub-question starts, before its generate() call has produced
+    // any text -- so without it this effect wouldn't fire and that step would
+    // render below the fold with no scroll ever bringing it into view.
+  }, [messages, draftReply, researchStatus]);
 
   useEffect(() => {
     if (autoLoadStartedRef.current || !wasmSupported) return;
