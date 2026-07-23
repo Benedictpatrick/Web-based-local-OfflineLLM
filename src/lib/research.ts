@@ -9,6 +9,12 @@ export type GenerateOnceFn = (
   opts?: GenerateOnceOptions
 ) => Promise<{ text: string; aborted: boolean }>;
 
+/** Matches searchWeb's signature -- injected for the same reason as
+ *  GenerateOnceFn: keeps this module free of a direct fetch/network dependency. */
+export type WebSearchFn = (
+  query: string
+) => Promise<{ contextBlock: string; sources: { title: string; url: string }[] }>;
+
 export const RESEARCH_PERSONA =
   "You are Navo Research, an assistant built specifically for in-depth research (as distinct from Navo's general chat persona). Be thorough, structured, and precise rather than brief.";
 
@@ -72,6 +78,10 @@ export interface RunResearchOptions {
   contextBlock: string;
   userClarification?: string;
   generate: GenerateOnceFn;
+  /** If provided, runs a web search per sub-question (or once for a quick pass)
+   *  and folds the results into that generation's context. Omit to skip web
+   *  search entirely -- research still works purely off the model otherwise. */
+  search?: WebSearchFn;
   onSubQuestionStart: (index: number, question: string) => void;
   onSubQuestionDone: (index: number, answer: string) => void;
   /** Live-streaming callback, mirrors generateOnce's onDelta for the composer's draft display. */
@@ -94,6 +104,7 @@ export async function runResearch(
     contextBlock,
     userClarification,
     generate,
+    search,
     onSubQuestionStart,
     onSubQuestionDone,
     onDelta,
@@ -108,10 +119,23 @@ export async function runResearch(
 
   const parts: string[] = [];
   const subAnswers: { question: string; answer: string }[] = [];
+  // Collected across every sub-question and appended once, verbatim, at the
+  // end -- deterministic, not model-generated, so links can't get mangled by
+  // a small model paraphrasing a URL.
+  const allSources: { title: string; url: string }[] = [];
 
   for (let i = 0; i < subQuestions.length; i++) {
     const subQuestion = subQuestions[i];
     onSubQuestionStart(i, subQuestion);
+
+    let webBlock = "";
+    if (search) {
+      const { contextBlock: block, sources } = await search(subQuestion);
+      webBlock = block;
+      for (const s of sources) {
+        if (!allSources.some((existing) => existing.url === s.url)) allSources.push(s);
+      }
+    }
 
     const prefix = parts.join("");
     const header = isSinglePass ? "" : `### ${subQuestion}\n`;
@@ -124,7 +148,9 @@ export async function runResearch(
             (isSinglePass
               ? ""
               : " Answer concisely (2-4 sentences) -- this is one part of a larger research report, not the final answer.") +
-            (contextBlock ? `\n\n${contextBlock}` : ""),
+            (webBlock ? " Use the web search results below for current information." : "") +
+            (contextBlock ? `\n\n${contextBlock}` : "") +
+            (webBlock ? `\n\n${webBlock}` : ""),
         },
         {
           role: "user",
@@ -144,11 +170,16 @@ export async function runResearch(
     onSubQuestionDone(i, text);
   }
 
+  const sourcesFooter =
+    allSources.length > 0
+      ? `\n\n### Sources\n${allSources.map((s, i) => `${i + 1}. [${s.title}](${s.url})`).join("\n")}`
+      : "";
+
   // A single pass that already covers the whole topic (quick mode, or
   // decomposition falling back to [topic]) already stands alone as the
   // report -- a synthesis pass over one answer would be redundant.
   if (isSinglePass) {
-    return { transcript: parts.join("").trim() };
+    return { transcript: (parts.join("").trim() + sourcesFooter).trim() };
   }
 
   const prefix = parts.join("");
@@ -173,5 +204,5 @@ export async function runResearch(
   );
 
   parts.push(`${summaryHeader}${synthesis}`);
-  return { transcript: parts.join("").trim() };
+  return { transcript: (parts.join("").trim() + sourcesFooter).trim() };
 }

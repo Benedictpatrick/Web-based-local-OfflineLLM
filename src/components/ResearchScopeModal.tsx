@@ -8,6 +8,7 @@ import { haptic } from "@/lib/haptics";
 export interface ResearchScopeAnswers {
   depth: "quick" | "deep";
   useGrounding: boolean;
+  useWebSearch: boolean;
   clarification?: string;
 }
 
@@ -38,6 +39,25 @@ export default function ResearchScopeModal({
 }) {
   const [depth, setDepth] = useState<"quick" | "deep" | null>(null);
   const [useGrounding, setUseGrounding] = useState<boolean | null>(null);
+  const [useWebSearch, setUseWebSearch] = useState<boolean | null>(null);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator === "undefined" ? true : navigator.onLine
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => {
+      setIsOnline(false);
+      setUseWebSearch(false);
+    };
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, [open]);
   const [clarifyingQuestion, setClarifyingQuestion] = useState<string | null>(null);
   const [clarificationAnswer, setClarificationAnswer] = useState("");
 
@@ -59,18 +79,24 @@ export default function ResearchScopeModal({
     onClose();
     setDepth(null);
     setUseGrounding(null);
+    setUseWebSearch(null);
     setClarifyingQuestion(null);
     setClarificationAnswer("");
   }
 
   function handleStart() {
-    if (!depth || useGrounding === null) return;
+    if (!depth || useGrounding === null || useWebSearch === null) return;
     haptic("tap");
-    onStart({ depth, useGrounding, clarification: clarificationAnswer.trim() || undefined });
+    onStart({
+      depth,
+      useGrounding,
+      useWebSearch,
+      clarification: clarificationAnswer.trim() || undefined,
+    });
     handleClose();
   }
 
-  const canStart = depth !== null && useGrounding !== null;
+  const canStart = depth !== null && useGrounding !== null && useWebSearch !== null;
 
   return (
     <>
@@ -156,6 +182,48 @@ export default function ResearchScopeModal({
                 }}
               >
                 No, just your own knowledge
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-medium text-foreground-muted">
+              Search the web for this?
+            </p>
+            <p className="mb-2 text-xs text-foreground-muted/70">
+              {isOnline
+                ? "Needs an internet connection — sends your sub-questions to DuckDuckGo. Everything else about Navo stays on this device."
+                : "You're offline right now, so this isn't available until you reconnect."}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={!isOnline}
+                className={`rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  useWebSearch === true
+                    ? "border-accent bg-accent/10"
+                    : "border-border hover:bg-surface"
+                }`}
+                onClick={() => {
+                  haptic("tap");
+                  setUseWebSearch(true);
+                }}
+              >
+                Yes, look things up online
+              </button>
+              <button
+                type="button"
+                className={`rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors ${
+                  useWebSearch === false
+                    ? "border-accent bg-accent/10"
+                    : "border-border hover:bg-surface"
+                }`}
+                onClick={() => {
+                  haptic("tap");
+                  setUseWebSearch(false);
+                }}
+              >
+                No, just the model&apos;s own knowledge
               </button>
             </div>
           </div>

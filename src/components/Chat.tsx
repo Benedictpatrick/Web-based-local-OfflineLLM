@@ -22,6 +22,7 @@ import {
 } from "@/lib/llm";
 import { generateOnce } from "@/lib/generation";
 import { runResearch } from "@/lib/research";
+import { searchWeb } from "@/lib/webSearch";
 import { topRelevantEntries, embedChunks, topRelevantChunks, type TextChunk } from "@/lib/retrieval";
 import {
   isMemoryEnabled,
@@ -516,6 +517,7 @@ export default function Chat({
         contextBlock,
         userClarification: answers.clarification,
         generate: generateOnce,
+        search: answers.useWebSearch ? searchWeb : undefined,
         onSubQuestionStart: (i, question) => {
           setResearchStatus((prev) => {
             const next = [...prev];
