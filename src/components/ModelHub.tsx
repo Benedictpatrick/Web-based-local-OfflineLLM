@@ -9,6 +9,7 @@ import {
   hasWebGpu,
   isLikelyTooLargeForDevice,
   isModelCached,
+  isWasmOnly,
   isWebgpuOnly,
   type ModelCategory,
   type ModelId,
@@ -25,6 +26,7 @@ const CATEGORY_LABELS: Record<ModelCategory, string> = {
   coding: "Coding",
   math: "Math",
   reasoning: "Reasoning",
+  uncensored: "Uncensored",
 };
 
 const TAG_CLASS = "rounded-md bg-surface-hover px-1.5 py-0.5 text-xs font-medium text-foreground-muted";
@@ -215,6 +217,11 @@ export default function ModelHub({
                           {gpuLocked && webgpu === false && (
                             <p className="mt-1 text-xs text-amber-500">
                               Requires WebGPU, which isn&apos;t available on this device.
+                            </p>
+                          )}
+                          {isWasmOnly(m) && (
+                            <p className="mt-1 text-xs text-foreground-muted">
+                              Runs on CPU only — no GPU-accelerated build exists for this model.
                             </p>
                           )}
                           {tooLarge && (

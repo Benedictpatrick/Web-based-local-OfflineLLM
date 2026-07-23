@@ -13,13 +13,16 @@ export type ModelCategory =
   | "powerful"
   | "coding"
   | "math"
-  | "reasoning";
+  | "reasoning"
+  | "uncensored";
 
 export interface ModelEntry {
   id: string;
   label: string;
-  /** MLC-format id used by the WebGPU (web-llm) engine. Always required. */
-  mlcId: string;
+  /** MLC-format id used by the WebGPU (web-llm) engine. Omit for models with
+   *  no MLC-compiled build available -- these only run on WASM regardless of
+   *  whether the device supports WebGPU. See isWasmOnly. */
+  mlcId?: string;
   /** GGUF repo/file used by the WASM (wllama) fallback engine. Models without
    *  these only run on WebGPU — see webgpuOnly. */
   repo?: string;
@@ -208,6 +211,19 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     sizeGB: 3.4,
     category: "balanced",
   },
+  // No MLC-compiled build exists for this anywhere (checked): community
+  // fine-tunes like this only get GGUF quantizations, not the WebGPU-format
+  // conversion MLC requires. WASM-only, so no mlcId -- see isWasmOnly.
+  {
+    id: "llama3.2-3b-uncensored",
+    label: "Llama 3.2 3B Uncensored (~2.2GB)",
+    repo: "bartowski/Llama-3.2-3B-Instruct-uncensored-GGUF",
+    file: "Llama-3.2-3B-Instruct-uncensored-Q4_K_M.gguf",
+    hubDescription: "Community fine-tune of Llama 3.2 3B with refusal behavior removed.",
+    sizeGB: 2.24,
+    category: "uncensored",
+    provider: "meta",
+  },
 ];
 
 export type ModelId = (typeof AVAILABLE_MODELS)[number]["id"];
@@ -216,6 +232,12 @@ export type ModelId = (typeof AVAILABLE_MODELS)[number]["id"];
  *  run on WebGPU and are hidden on WASM-only devices. */
 export function isWebgpuOnly(model: Pick<ModelEntry, "repo" | "file">): boolean {
   return !model.repo || !model.file;
+}
+
+/** True for entries with no MLC-compiled build — these only run on the WASM
+ *  (wllama) engine, even on devices that do support WebGPU. */
+export function isWasmOnly(model: Pick<ModelEntry, "mlcId">): boolean {
+  return !model.mlcId;
 }
 
 /** Splits a label like "Llama 3.2 3B (better quality, ~1.9GB)" into a clean
@@ -382,9 +404,9 @@ export async function loadEngine(
   // failure (a stall, a one-off context loss) can't permanently downgrade the
   // whole session to WASM. `engineKind` below only *records* which engine is
   // currently active for getEngineKind() -- it must not gate this decision.
-  if (await hasWebGpu()) {
+  if (!isWasmOnly(model) && (await hasWebGpu())) {
     try {
-      await loadWebgpuEngine(model.mlcId, onProgress);
+      await loadWebgpuEngine(model.mlcId!, onProgress);
       engineKind = "webgpu";
       loadedModelId = modelId;
       return;
@@ -507,6 +529,15 @@ async function loadWasmEngine(
       const isLowMemory = isLowMemoryDevice();
       const nCtx = isLowMemory ? 512 : isMobile ? 1024 : 2048;
 
+      // Once the download itself hits 100%, wllama moves into parsing the
+      // GGUF and building the WASM-side context -- a CPU-bound step with no
+      // progress callbacks of its own. For large enough models that step can
+      // legitimately take longer than STALL_TIMEOUT_MS, and with no further
+      // callback to touch() the watchdog, it reads as a stalled connection
+      // even though the network part is long done. Once we've seen the
+      // download complete, keep touching on an interval so this phase can't
+      // be mistaken for flakiness -- there's no "connection" left to stall.
+      let postDownloadHeartbeat: ReturnType<typeof setInterval> | null = null;
       const loadParams = {
         n_ctx: nCtx,
         n_batch: isLowMemory ? 64 : isMobile ? 128 : undefined,
@@ -514,6 +545,9 @@ async function loadWasmEngine(
         progressCallback: ({ loaded, total }: { loaded: number; total: number }) => {
           touch();
           onProgress?.({ loaded, total });
+          if (loaded >= total && !postDownloadHeartbeat) {
+            postDownloadHeartbeat = setInterval(touch, 5000);
+          }
         },
       };
 
@@ -535,6 +569,7 @@ async function loadWasmEngine(
         }
         return instance;
       } finally {
+        if (postDownloadHeartbeat) clearInterval(postDownloadHeartbeat);
         if (myAttemptId === wllamaAttemptId) wllamaLoadingPromise = null;
       }
     })()
@@ -571,6 +606,7 @@ export async function isModelCached(modelId: ModelId): Promise<boolean> {
         .catch(() => false)
     : false;
   if (wllamaCached) return true;
+  if (!model.mlcId) return false;
 
   try {
     const webllm = await import("@mlc-ai/web-llm");
@@ -604,10 +640,12 @@ export async function deleteModelCache(modelId: ModelId): Promise<void> {
       .catch(() => {});
   }
 
-  try {
-    const webllm = await import("@mlc-ai/web-llm");
-    await webllm.deleteModelAllInfoInCache(model.mlcId);
-  } catch {}
+  if (model.mlcId) {
+    try {
+      const webllm = await import("@mlc-ai/web-llm");
+      await webllm.deleteModelAllInfoInCache(model.mlcId);
+    } catch {}
+  }
 }
 
 export function getLastGenerationStats(): GenerationStats | null {
