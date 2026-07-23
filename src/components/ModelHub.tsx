@@ -122,12 +122,14 @@ export default function ModelHub({
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-accent">
             <path
-              d="M9.5 3a5.5 5.5 0 0 0-1.4 10.8c.3.1.4.3.4.6v.6a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-.6c0-.3.2-.5.4-.6A5.5 5.5 0 0 0 9.5 3ZM8.5 19h2m-2-2h2"
+              d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5"
               stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+            <path d="M9 18h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M10 22h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span>
             <span className="block text-sm font-medium">Not sure which to pick?</span>
