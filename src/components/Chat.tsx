@@ -44,6 +44,7 @@ import ResearchScopeModal, { type ResearchScopeAnswers } from "@/components/Rese
 import ResearchProgress, { type ResearchStep } from "@/components/ResearchProgress";
 import ModeSwitch from "@/components/ModeSwitch";
 import ResearchSplash from "@/components/ResearchSplash";
+import WhatsNewModal, { shouldShowWhatsNew } from "@/components/WhatsNewModal";
 
 // react-markdown + katex + the syntax-highlighter's language grammars are
 // ~650KB on their own and aren't needed until a message actually renders, so
@@ -206,7 +207,6 @@ const MAX_LOAD_RETRIES = 2;
 export interface ChatHandle {
   openModelPicker: () => void;
   loadModel: (id: ModelId) => void;
-  switchToResearch: () => void;
 }
 
 export default function Chat({
@@ -255,6 +255,7 @@ export default function Chat({
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [researchMode, setResearchMode] = useState(false);
   const [modeSwitching, setModeSwitching] = useState<"to-research" | "to-navo" | null>(null);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [researchStatus, setResearchStatus] = useState<ResearchStep[]>([]);
   const [researchScopeOpen, setResearchScopeOpen] = useState(false);
   const [pendingResearchTopic, setPendingResearchTopic] = useState<string | null>(null);
@@ -320,7 +321,6 @@ export default function Chat({
       setModelId(id);
       handleLoadModel(id);
     },
-    switchToResearch: () => handleModeSwitch("research"),
   }));
 
 
@@ -331,6 +331,16 @@ export default function Chat({
       }
     };
   }, []);
+
+  // Only announce Navo Research once a model is actually loaded and the chat
+  // screen is showing, not on the model picker/loading screen beforehand.
+  useEffect(() => {
+    if (status !== "ready") return;
+    const id = requestAnimationFrame(() => {
+      if (shouldShowWhatsNew()) setWhatsNewOpen(true);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [status]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -1342,6 +1352,14 @@ export default function Chat({
           if (pendingResearchConversationId !== null && pendingResearchTopic !== null) {
             generateResearchReply(pendingResearchConversationId, pendingResearchTopic, answers);
           }
+        }}
+      />
+      <WhatsNewModal
+        open={whatsNewOpen}
+        onClose={() => setWhatsNewOpen(false)}
+        onTry={() => {
+          setWhatsNewOpen(false);
+          handleModeSwitch("research");
         }}
       />
     </div>
