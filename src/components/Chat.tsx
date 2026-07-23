@@ -521,7 +521,14 @@ export default function Chat({
         onSubQuestionStart: (i, question) => {
           setResearchStatus((prev) => {
             const next = [...prev];
-            next[i] = { question, state: "active" };
+            next[i] = { question, state: answers.useWebSearch ? "searching" : "active" };
+            return next;
+          });
+        },
+        onSearchDone: (i) => {
+          setResearchStatus((prev) => {
+            const next = [...prev];
+            if (next[i]) next[i] = { ...next[i], state: "active" };
             return next;
           });
         },
@@ -1075,26 +1082,24 @@ export default function Chat({
               <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
               <div className="min-w-0 flex-1 pt-1">
                 {draftReply ? (
-                  <>
-                    <MarkdownMessage content={draftReply} />
-                    {agentStatus && (
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-                        {agentStatus}
-                      </p>
-                    )}
-                    {researchStatus.length > 0 && (
-                      <div className="mt-1">
-                        <ResearchProgress steps={researchStatus} />
-                      </div>
-                    )}
-                  </>
+                  <MarkdownMessage content={draftReply} />
                 ) : (
                   <span className="inline-flex gap-1">
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.3s]" />
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.15s]" />
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted" />
                   </span>
+                )}
+                {agentStatus && (
+                  <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                    {agentStatus}
+                  </p>
+                )}
+                {researchStatus.length > 0 && (
+                  <div className="mt-1">
+                    <ResearchProgress steps={researchStatus} />
+                  </div>
                 )}
               </div>
             </div>

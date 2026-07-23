@@ -83,6 +83,10 @@ export interface RunResearchOptions {
    *  search entirely -- research still works purely off the model otherwise. */
   search?: WebSearchFn;
   onSubQuestionStart: (index: number, question: string) => void;
+  /** Fires right after the web search for a sub-question resolves (only ever
+   *  called when `search` was provided), before that sub-question's generate
+   *  call starts -- lets the UI switch from a "searching" to "answering" state. */
+  onSearchDone?: (index: number, resultCount: number) => void;
   onSubQuestionDone: (index: number, answer: string) => void;
   /** Live-streaming callback, mirrors generateOnce's onDelta for the composer's draft display. */
   onDelta?: (fullTranscriptSoFar: string) => void;
@@ -106,6 +110,7 @@ export async function runResearch(
     generate,
     search,
     onSubQuestionStart,
+    onSearchDone,
     onSubQuestionDone,
     onDelta,
   } = opts;
@@ -135,6 +140,7 @@ export async function runResearch(
       for (const s of sources) {
         if (!allSources.some((existing) => existing.url === s.url)) allSources.push(s);
       }
+      onSearchDone?.(i, sources.length);
     }
 
     const prefix = parts.join("");

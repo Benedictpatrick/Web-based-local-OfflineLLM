@@ -2,13 +2,15 @@
 
 export interface ResearchStep {
   question: string;
-  state: "pending" | "active" | "done";
+  state: "pending" | "searching" | "active" | "done";
 }
 
 /** Small checklist of research sub-questions in flight, rendered in the same
  *  slot Chat.tsx's single-string agentStatus occupies during agent mode --
  *  generalized to a list since research can have multiple concurrent-looking
- *  (though always sequentially run) steps. */
+ *  (though always sequentially run) steps. "searching" is a distinct phase
+ *  from "active" (answering) so the web-search toggle in the scope modal has
+ *  a visible effect while it's happening, not just in the final Sources list. */
 export default function ResearchProgress({ steps }: { steps: ResearchStep[] }) {
   if (steps.length === 0) return null;
 
@@ -26,13 +28,24 @@ export default function ResearchProgress({ steps }: { steps: ResearchStep[] }) {
                 strokeLinejoin="round"
               />
             </svg>
+          ) : step.state === "searching" ? (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="shrink-0 animate-pulse text-accent"
+            >
+              <circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" />
+              <path d="M14.5 14.5L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
           ) : step.state === "active" ? (
             <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent" />
           ) : (
             <span className="h-2 w-2 shrink-0 rounded-full border border-border" />
           )}
-          <span className={step.state === "active" ? "text-foreground" : "text-foreground-muted"}>
-            {step.question}
+          <span className={step.state === "pending" ? "text-foreground-muted" : "text-foreground"}>
+            {step.state === "searching" ? `Searching the web: ${step.question}` : step.question}
           </span>
         </li>
       ))}
