@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { generateOnce } from "@/lib/generation";
 import { proposeClarifyingQuestion } from "@/lib/research";
 import { haptic } from "@/lib/haptics";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 
 export interface ResearchScopeAnswers {
   depth: "quick" | "deep";
@@ -40,24 +41,11 @@ export default function ResearchScopeModal({
   const [depth, setDepth] = useState<"quick" | "deep" | null>(null);
   const [useGrounding, setUseGrounding] = useState<boolean | null>(null);
   const [useWebSearch, setUseWebSearch] = useState<boolean | null>(null);
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator === "undefined" ? true : navigator.onLine
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => {
-      setIsOnline(false);
-      setUseWebSearch(false);
-    };
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
-    return () => {
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
-    };
-  }, [open]);
+  const isOnline = useOnlineStatus();
+  // Going offline mid-session should force this back to "no" even if the user
+  // picked "yes" earlier while online, without needing an effect that writes
+  // state -- deriving it here does the same job at render time.
+  const effectiveWebSearch = isOnline ? useWebSearch : false;
   const [clarifyingQuestion, setClarifyingQuestion] = useState<string | null>(null);
   const [clarificationAnswer, setClarificationAnswer] = useState("");
 
@@ -85,18 +73,18 @@ export default function ResearchScopeModal({
   }
 
   function handleStart() {
-    if (!depth || useGrounding === null || useWebSearch === null) return;
+    if (!depth || useGrounding === null || effectiveWebSearch === null) return;
     haptic("tap");
     onStart({
       depth,
       useGrounding,
-      useWebSearch,
+      useWebSearch: effectiveWebSearch,
       clarification: clarificationAnswer.trim() || undefined,
     });
     handleClose();
   }
 
-  const canStart = depth !== null && useGrounding !== null && useWebSearch !== null;
+  const canStart = depth !== null && useGrounding !== null && effectiveWebSearch !== null;
 
   return (
     <>
@@ -167,7 +155,7 @@ export default function ResearchScopeModal({
                   setUseGrounding(true);
                 }}
               >
-                Yes, use what I've saved
+                Yes, use what I&apos;ve saved
               </button>
               <button
                 type="button"
@@ -200,7 +188,7 @@ export default function ResearchScopeModal({
                 type="button"
                 disabled={!isOnline}
                 className={`rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                  useWebSearch === true
+                  effectiveWebSearch === true
                     ? "border-accent bg-accent/10"
                     : "border-border hover:bg-surface"
                 }`}
@@ -214,7 +202,7 @@ export default function ResearchScopeModal({
               <button
                 type="button"
                 className={`rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors ${
-                  useWebSearch === false
+                  effectiveWebSearch === false
                     ? "border-accent bg-accent/10"
                     : "border-border hover:bg-surface"
                 }`}

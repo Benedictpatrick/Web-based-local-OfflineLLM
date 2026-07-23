@@ -30,11 +30,22 @@ export interface Memory {
   embedding?: number[];
 }
 
+/** A connected MCP tool server. Tools are only ever surfaced to the model or
+ *  callable if they're in enabledTools -- the user picks these explicitly. */
+export interface McpServer {
+  id: number;
+  name: string;
+  url: string;
+  createdAt: number;
+  enabledTools: { name: string; description: string }[];
+}
+
 const db = new Dexie("offline-llm-app") as Dexie & {
   journal: EntityTable<JournalEntry, "id">;
   chat: EntityTable<ChatMessage, "id">;
   conversations: EntityTable<Conversation, "id">;
   memories: EntityTable<Memory, "id">;
+  mcpServers: EntityTable<McpServer, "id">;
 };
 
 db.version(1).stores({
@@ -73,6 +84,14 @@ db.version(3).stores({
   chat: "++id, conversationId, createdAt",
   conversations: "++id, updatedAt",
   memories: "++id, createdAt",
+});
+
+db.version(4).stores({
+  journal: "++id, createdAt",
+  chat: "++id, conversationId, createdAt",
+  conversations: "++id, updatedAt",
+  memories: "++id, createdAt",
+  mcpServers: "++id, url",
 });
 
 export { db };

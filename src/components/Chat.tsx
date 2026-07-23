@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { ChatCompletionMessage } from "@wllama/wllama/esm/index.js";
@@ -35,9 +35,11 @@ import {
 import { extractTextFromFile, chunkText } from "@/lib/fileExtraction";
 import { extractSolePythonBlock } from "@/lib/agentCode";
 import { runPython } from "@/lib/pythonRunner";
+import { callMcpTool, extractSoleToolCall } from "@/lib/mcp";
 import { transcribeAudio, type SpeechModelProgress } from "@/lib/speechRecognition";
 import { shareOrDownloadBenchmarkCard } from "@/lib/shareCard";
 import { haptic } from "@/lib/haptics";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import ModelPicker from "@/components/ModelPicker";
 import LoadingScreen from "@/components/LoadingScreen";
 import InstallBanner from "@/components/InstallBanner";
@@ -46,6 +48,7 @@ import ResearchProgress, { type ResearchStep } from "@/components/ResearchProgre
 import ModeSwitch from "@/components/ModeSwitch";
 import ResearchSplash from "@/components/ResearchSplash";
 import WhatsNewModal, { shouldShowWhatsNew } from "@/components/WhatsNewModal";
+import McpServersModal from "@/components/McpServersModal";
 
 // react-markdown + katex + the syntax-highlighter's language grammars are
 // ~650KB on their own and aren't needed until a message actually renders, so
@@ -187,6 +190,22 @@ const AGENT_INSTRUCTIONS =
 
 const MAX_AGENT_STEPS = 2;
 
+const MAX_MCP_STEPS = 2;
+
+/** Builds a tight, per-tool-name instruction block for whichever MCP tools the
+ *  user has enabled -- no JSON schemas, just names and one-line descriptions,
+ *  since small local models need the tool-call protocol to stay simple to be
+ *  reliable at all. Returns "" when nothing is enabled. */
+function buildMcpInstructions(
+  enabledToolMap: Map<string, { serverUrl: string; serverName: string; description: string }>
+): string {
+  if (enabledToolMap.size === 0) return "";
+  const toolLines = [...enabledToolMap.entries()]
+    .map(([name, meta]) => `- ${name}: ${meta.description || "(no description)"}`)
+    .join("\n");
+  return `\n\nYou can call these tools when they'd genuinely help answer the question:\n${toolLines}\n\nTo call one, reply with ONLY a fenced \`\`\`tool_call code block containing JSON like {"tool": "toolName", "args": {...}} -- the fence and nothing else, zero words before or after it. Its result will be shown to you next, and you must then give the final answer in plain language using that result. Only call a tool when it's truly needed; for everything else, answer normally without one.`;
+}
+
 const MAX_TEXTAREA_HEIGHT = 160;
 
 const EXAMPLE_PROMPTS = [
@@ -254,6 +273,16 @@ export default function Chat({
   const [attachError, setAttachError] = useState<string | null>(null);
   const [agentMode, setAgentMode] = useState(false);
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
+  const mcpServers = useLiveQuery(() => db.mcpServers.toArray(), [], []);
+  const [mcpServersModalOpen, setMcpServersModalOpen] = useState(false);
+  const [pendingToolCall, setPendingToolCall] = useState<{
+    serverUrl: string;
+    serverName: string;
+    toolName: string;
+    args: Record<string, unknown>;
+  } | null>(null);
+  const confirmToolCallRef = useRef<((approved: boolean) => void) | null>(null);
+  const isOnline = useOnlineStatus();
   const [researchMode, setResearchMode] = useState(false);
   const [modeSwitching, setModeSwitching] = useState<"to-research" | "to-navo" | null>(null);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
@@ -276,6 +305,32 @@ export default function Chat({
   const audioChunksRef = useRef<Blob[]>([]);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const statusDetailTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const enabledToolMap = useMemo(() => {
+    const map = new Map<string, { serverUrl: string; serverName: string; description: string }>();
+    for (const server of mcpServers ?? []) {
+      for (const tool of server.enabledTools) {
+        if (!map.has(tool.name)) {
+          map.set(tool.name, {
+            serverUrl: server.url,
+            serverName: server.name,
+            description: tool.description,
+          });
+        }
+      }
+    }
+    return map;
+  }, [mcpServers]);
+
+  // A pending tool-call confirmation can never be left to hang: if the user
+  // stops generation or navigates away while it's showing, resolve it to
+  // "declined" so streamReply's awaited promise always settles.
+  useEffect(() => {
+    return () => {
+      confirmToolCallRef.current?.(false);
+      confirmToolCallRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -473,7 +528,8 @@ export default function Chat({
       ? CODE_PROMPT
       : SYSTEM_PROMPT +
         (MATH_RE.test(userText) ? MATH_INSTRUCTIONS : "") +
-        (agentMode ? AGENT_INSTRUCTIONS : "");
+        (agentMode ? AGENT_INSTRUCTIONS : "") +
+        (isOnline ? buildMcpInstructions(enabledToolMap) : "");
     await streamReply(
       [
         { role: "system", content: systemPrompt + (contextBlock ? `\n\n${contextBlock}` : "") },
@@ -483,6 +539,7 @@ export default function Chat({
       {
         temperature: isCodeRequest || agentMode ? 0.3 : undefined,
         allowAgent: agentMode && !isCodeRequest,
+        allowMcp: enabledToolMap.size > 0 && !isCodeRequest && isOnline,
       }
     );
 
@@ -593,7 +650,7 @@ export default function Chat({
   async function streamReply(
     promptMessages: ChatCompletionMessage[],
     activeConversationId: number,
-    opts?: { temperature?: number; allowAgent?: boolean }
+    opts?: { temperature?: number; allowAgent?: boolean; allowMcp?: boolean }
   ) {
     setStreaming(true);
     setDraftReply("");
@@ -619,33 +676,86 @@ export default function Chat({
           !aborted && opts?.allowAgent && step < MAX_AGENT_STEPS
             ? extractSolePythonBlock(full)
             : null;
+        const toolCall =
+          !aborted && !code && opts?.allowMcp && step < MAX_MCP_STEPS
+            ? extractSoleToolCall(full)
+            : null;
 
-        if (!code) {
+        if (!code && !toolCall) {
           transcriptParts.push(full);
           break;
         }
 
-        transcriptParts.push(full);
-        setDraftReply(transcriptParts.join(""));
-        setAgentStatus("Running code…");
-        let outputText: string;
-        try {
-          outputText = (await runPython(code)).output;
-        } catch (err) {
-          console.error(err);
-          const detail = err instanceof Error ? err.message : String(err);
-          outputText = `Couldn't run the code: ${detail}`;
+        if (code) {
+          transcriptParts.push(full);
+          setDraftReply(transcriptParts.join(""));
+          setAgentStatus("Running code…");
+          let outputText: string;
+          try {
+            outputText = (await runPython(code)).output;
+          } catch (err) {
+            console.error(err);
+            const detail = err instanceof Error ? err.message : String(err);
+            outputText = `Couldn't run the code: ${detail}`;
+          }
+          setAgentStatus(null);
+          transcriptParts.push(`\n\n**Output:**\n\`\`\`\n${outputText}\n\`\`\`\n\n`);
+          setDraftReply(transcriptParts.join(""));
+
+          messages = [
+            ...messages,
+            { role: "assistant", content: full },
+            {
+              role: "user",
+              content: `Code output:\n${outputText}\n\nUsing this output, give the final answer in plain language. Don't run more code unless truly necessary, and don't repeat the code.`,
+            },
+          ];
+          continue;
         }
-        setAgentStatus(null);
-        transcriptParts.push(`\n\n**Output:**\n\`\`\`\n${outputText}\n\`\`\`\n\n`);
+
+        // --- MCP tool-call branch ---
+        const resolved = enabledToolMap.get(toolCall!.tool);
+        if (!resolved) {
+          // Model named a tool that isn't enabled/known -- don't silently
+          // execute nothing; show the raw reply as-is and stop, same as the
+          // no-code/no-tool-call path above.
+          transcriptParts.push(full);
+          break;
+        }
+
+        setPendingToolCall({
+          serverUrl: resolved.serverUrl,
+          serverName: resolved.serverName,
+          toolName: toolCall!.tool,
+          args: toolCall!.args,
+        });
+        const approved = await new Promise<boolean>((resolve) => {
+          confirmToolCallRef.current = resolve;
+        });
+        setPendingToolCall(null);
+        confirmToolCallRef.current = null;
+
+        if (!approved) {
+          transcriptParts.push(`Tool call to \`${toolCall!.tool}\` was not run (declined).`);
+          break;
+        }
+
+        transcriptParts.push(`Called \`${toolCall!.tool}\`…`);
         setDraftReply(transcriptParts.join(""));
+        setAgentStatus(`Calling ${resolved.serverName}…`);
+        const { text: toolOutput, isError } = await callMcpTool(
+          resolved.serverUrl,
+          toolCall!.tool,
+          toolCall!.args
+        );
+        setAgentStatus(null);
 
         messages = [
           ...messages,
           { role: "assistant", content: full },
           {
             role: "user",
-            content: `Code output:\n${outputText}\n\nUsing this output, give the final answer in plain language. Don't run more code unless truly necessary, and don't repeat the code.`,
+            content: `Tool output${isError ? " (error)" : ""}:\n${toolOutput}\n\nUsing this output, give the final answer in plain language. Don't call another tool unless truly necessary.`,
           },
         ];
       }
@@ -720,6 +830,7 @@ export default function Chat({
   function handleStop() {
     haptic("tap");
     abortGeneration();
+    confirmToolCallRef.current?.(false);
   }
 
   // Entering Navo Research gets the full 5s branded splash (ResearchSplash);
@@ -948,6 +1059,19 @@ export default function Chat({
             onBrowseMore={onBrowseModelHub}
           />
           <div className="flex items-center gap-2">
+            <span
+              className="flex shrink-0 items-center gap-1.5 rounded-lg px-1.5 py-1.5"
+              title={
+                isOnline
+                  ? "Online -- web search and MCP tools are available"
+                  : "Offline -- web search and MCP tools are unavailable until you reconnect"
+              }
+            >
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${isOnline ? "bg-emerald-500" : "bg-foreground-muted/50"}`}
+              />
+              <span className="hidden sm:inline">{isOnline ? "Online" : "Offline"}</span>
+            </span>
             <button
               type="button"
               className={`glass-chip flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors hover:text-foreground ${showStats ? "text-foreground" : ""}`}
@@ -1127,6 +1251,38 @@ export default function Chat({
                     {agentStatus}
                   </p>
                 )}
+                {pendingToolCall && (
+                  <div className="mt-2 max-w-sm rounded-2xl border border-accent bg-accent/10 p-3 text-sm">
+                    <p className="font-medium">
+                      Call <code>{pendingToolCall.toolName}</code> on {pendingToolCall.serverName}?
+                    </p>
+                    <pre className="mt-1 overflow-x-auto text-xs text-foreground-muted">
+                      {JSON.stringify(pendingToolCall.args, null, 2)}
+                    </pre>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-opacity hover:opacity-90"
+                        onClick={() => {
+                          haptic("tap");
+                          confirmToolCallRef.current?.(true);
+                        }}
+                      >
+                        Allow
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-surface"
+                        onClick={() => {
+                          haptic("tap");
+                          confirmToolCallRef.current?.(false);
+                        }}
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {researchStatus.length > 0 && (
                   <div className="mt-1">
                     <ResearchProgress steps={researchStatus} />
@@ -1296,6 +1452,36 @@ export default function Chat({
                     />
                   </svg>
                 </button>
+                <button
+                  type="button"
+                  aria-label="Connect MCP tool servers"
+                  title={
+                    isOnline
+                      ? "Connect external tool servers the assistant can call, with your confirmation each time"
+                      : "Needs an internet connection -- you're offline right now"
+                  }
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 sm:h-9 sm:w-9 ${
+                    enabledToolMap.size > 0
+                      ? "glass-sheen bg-accent text-accent-foreground"
+                      : "glass-chip text-foreground-muted hover:text-foreground"
+                  }`}
+                  onClick={() => {
+                    haptic("tap");
+                    setMcpServersModalOpen(true);
+                  }}
+                  disabled={streaming || !isOnline}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M9 3v4M15 3v4M6 7h12l-1 5a5 5 0 0 1-5 4h0a5 5 0 0 1-5-4L6 7z"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M12 16v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -1372,6 +1558,10 @@ export default function Chat({
             generateResearchReply(pendingResearchConversationId, pendingResearchTopic, answers);
           }
         }}
+      />
+      <McpServersModal
+        open={mcpServersModalOpen}
+        onClose={() => setMcpServersModalOpen(false)}
       />
       <WhatsNewModal
         open={whatsNewOpen}
