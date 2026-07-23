@@ -15,6 +15,7 @@ import {
   getEngineKind,
   getLastGenerationStats,
   getLoadedContextSize,
+  isModelCached,
   requestPersistentStorage,
   isWasmSupported,
   loadEngine,
@@ -362,12 +363,17 @@ export default function Chat({
     // shown while the model is downloading, not after it has already landed.
     setStoragePersisted(await requestPersistentStorage());
 
+    // Checked upfront rather than inferred from progress callbacks: the
+    // WebGPU (web-llm) engine reports incremental "loaded < total" progress
+    // even when every byte comes from its own Cache Storage, so that
+    // heuristic can't tell a real download from a cache hit and was
+    // mislabeling every cached reload as a fresh download.
+    const wasAlreadyCached = await isModelCached(idToLoad);
+
     for (let attempt = 0; attempt <= MAX_LOAD_RETRIES; attempt++) {
       const startedAt = performance.now();
-      let sawPartialProgress = false;
       try {
         await loadEngine(idToLoad, ({ loaded, total, text }) => {
-          if (loaded < total) sawPartialProgress = true;
           if (text) {
             setProgress(text);
             setProgressPct(null);
@@ -380,9 +386,9 @@ export default function Chat({
         });
         const seconds = ((performance.now() - startedAt) / 1000).toFixed(1);
         setProgress(
-          sawPartialProgress
-            ? `Downloaded and loaded in ${seconds}s`
-            : `Loaded from local cache in ${seconds}s (no download needed)`
+          wasAlreadyCached
+            ? `Loaded from local cache in ${seconds}s (no download needed)`
+            : `Downloaded and loaded in ${seconds}s`
         );
         setHasLoadedOnce(true);
         setStatus("ready");
