@@ -1327,6 +1327,9 @@ export default function Chat({
               {lastStats.engine === "webgpu" ? " (GPU)" : ""}
             </p>
           )}
+          <p className="mt-2 text-center text-xs text-foreground-muted">
+            Navo can make mistakes. Check important info.
+          </p>
         </div>
       </div>
       <ResearchScopeModal
