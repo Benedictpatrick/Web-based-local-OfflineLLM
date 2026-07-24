@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { ChatCompletionMessage } from "@wllama/wllama/esm/index.js";
@@ -309,6 +309,7 @@ export default function Chat({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const stopIconClipId = useId();
   const autoLoadStartedRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -1569,15 +1570,47 @@ export default function Chat({
                     disabled={!streaming && !input.trim()}
                   >
                     <svg
-                      width="12"
-                      height="12"
+                      width="14"
+                      height="14"
                       viewBox="0 0 24 24"
-                      fill="currentColor"
                       className={`absolute transition-all duration-200 ${
                         streaming ? "scale-100 opacity-100" : "scale-50 opacity-0"
                       }`}
                     >
-                      <rect x="5" y="5" width="14" height="14" rx="2" />
+                      <defs>
+                        <clipPath id={stopIconClipId}>
+                          <rect x="5" y="5" width="14" height="14" rx="3" />
+                        </clipPath>
+                      </defs>
+                      {/* Liquid-fill stop icon: two out-of-phase wave paths
+                          scroll sideways inside the clipped square, giving a
+                          sloshing-liquid look instead of a static square while
+                          a reply streams. */}
+                      <g clipPath={`url(#${stopIconClipId})`}>
+                        <rect x="5" y="5" width="14" height="14" fill="currentColor" opacity="0.22" />
+                        <path
+                          className="liquid-wave liquid-wave-back"
+                          d="M-2 13 Q 2 10 6 13 T 14 13 T 22 13 T 30 13 T 38 13 V20 H-2 Z"
+                          fill="currentColor"
+                          opacity="0.45"
+                        />
+                        <path
+                          className="liquid-wave liquid-wave-front"
+                          d="M-2 14 Q 2 17 6 14 T 14 14 T 22 14 T 30 14 T 38 14 V20 H-2 Z"
+                          fill="currentColor"
+                          opacity="0.85"
+                        />
+                      </g>
+                      <rect
+                        x="5"
+                        y="5"
+                        width="14"
+                        height="14"
+                        rx="3"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
                     </svg>
                     <svg
                       width="15"

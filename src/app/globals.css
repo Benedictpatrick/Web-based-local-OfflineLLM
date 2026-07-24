@@ -173,6 +173,38 @@ body {
   animation: stop-pulse-ring 1.4s ease-out infinite;
 }
 
+/* Liquid-fill stop icon: the wave paths repeat every 8 SVG units (see the Q/T
+ * command spacing in Chat.tsx), so translating by exactly one period loops
+ * seamlessly. The back/front waves run at different speeds so they drift in
+ * and out of phase instead of moving as one rigid shape. */
+@keyframes liquid-wave-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-8px);
+  }
+}
+
+.liquid-wave {
+  animation: liquid-wave-scroll linear infinite;
+}
+
+.liquid-wave-back {
+  animation-duration: 1.6s;
+}
+
+.liquid-wave-front {
+  animation-duration: 1s;
+  animation-direction: reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-wave {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .stop-pulse-ring {
     animation: none;
