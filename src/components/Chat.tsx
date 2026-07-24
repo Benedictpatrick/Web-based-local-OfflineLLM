@@ -15,6 +15,7 @@ import {
   getEngineKind,
   getLastGenerationStats,
   getLoadedContextSize,
+  hasWebGpu,
   isModelCached,
   requestPersistentStorage,
   isWasmSupported,
@@ -41,6 +42,7 @@ import { shareOrDownloadBenchmarkCard } from "@/lib/shareCard";
 import { haptic } from "@/lib/haptics";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import ModelPicker from "@/components/ModelPicker";
+import ComposerActionsMenu from "@/components/ComposerActionsMenu";
 import LoadingScreen from "@/components/LoadingScreen";
 import InstallBanner from "@/components/InstallBanner";
 import ResearchScopeModal, { type ResearchScopeAnswers } from "@/components/ResearchScopeModal";
@@ -273,6 +275,12 @@ export default function Chat({
   const [attachError, setAttachError] = useState<string | null>(null);
   const [agentMode, setAgentMode] = useState(false);
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
+  // Whether this device can even load the dedicated math model (it's
+  // WebGPU-only, see AVAILABLE_MODELS) -- checked once since hasWebGpu()
+  // is memoized and doesn't change mid-session.
+  const [webGpuOk, setWebGpuOk] = useState(false);
+  const [mathNudgeArmed, setMathNudgeArmed] = useState(false);
+  const [mathNudgeDismissed, setMathNudgeDismissed] = useState(false);
   const mcpServers = useLiveQuery(() => db.mcpServers.toArray(), [], []);
   const [mcpServersModalOpen, setMcpServersModalOpen] = useState(false);
   const [pendingToolCall, setPendingToolCall] = useState<{
@@ -300,6 +308,7 @@ export default function Chat({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const autoLoadStartedRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -362,6 +371,16 @@ export default function Chat({
   useEffect(() => {
     return () => {
       if (statusDetailTimeoutRef.current) clearTimeout(statusDetailTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    hasWebGpu().then((ok) => {
+      if (!cancelled) setWebGpuOk(ok);
+    });
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -786,6 +805,13 @@ export default function Chat({
     haptic("tap");
     setInput("");
 
+    setMathNudgeDismissed(false);
+    setMathNudgeArmed(
+      !researchMode &&
+        MATH_RE.test(text) &&
+        AVAILABLE_MODELS.find((m) => m.id === modelId)?.category === "tiny"
+    );
+
     let activeConversationId = conversationId;
     if (!activeConversationId) {
       const now = Date.now();
@@ -919,13 +945,21 @@ export default function Chat({
       const text = await extractTextFromFile(file);
       const chunks = await embedChunks(chunkText(text));
       if (chunks.length === 0) {
-        setAttachError("Couldn't find any text in that file.");
+        setAttachError(
+          file.type.startsWith("image/")
+            ? "Couldn't find any readable text in that photo — try a clearer, more direct shot."
+            : "Couldn't find any text in that file."
+        );
         return;
       }
       setAttachedFile({ name: file.name, chunks });
     } catch (err) {
       console.error(err);
-      setAttachError("Couldn't read that file — try a .txt, .md, or .pdf.");
+      setAttachError(
+        file.type.startsWith("image/")
+          ? "Couldn't read that photo — try again with better lighting or focus."
+          : "Couldn't read that file — try a .txt, .md, or .pdf."
+      );
     } finally {
       setAttachingFile(false);
     }
@@ -1322,6 +1356,53 @@ export default function Chat({
         style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
       >
         <div className="mx-auto w-full max-w-2xl">
+          {mathNudgeArmed && webGpuOk && !mathNudgeDismissed && (
+            <div className="mb-2 flex items-start gap-3 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2.5 text-xs text-accent">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">Tiny models struggle with math</p>
+                <p className="mt-0.5 text-accent/80">
+                  {AVAILABLE_MODELS.find((m) => m.id === modelId)?.label ?? "This model"} is
+                  built for quick chat, not step-by-step reasoning.{" "}
+                  {modelDisplayParts(
+                    AVAILABLE_MODELS.find((m) => m.id === "qwen2.5-math-1.5b")!
+                  ).name}{" "}
+                  is tuned specifically for this.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-full bg-accent px-3 py-1.5 font-medium text-black transition-opacity hover:opacity-90"
+                  onClick={() => {
+                    haptic("tap");
+                    setMathNudgeArmed(false);
+                    setModelId("qwen2.5-math-1.5b");
+                    handleLoadModel("qwen2.5-math-1.5b");
+                  }}
+                >
+                  Switch model
+                </button>
+                <button
+                  type="button"
+                  aria-label="Dismiss"
+                  className="rounded-full p-1 text-accent/70 hover:text-accent"
+                  onClick={() => {
+                    haptic("tap");
+                    setMathNudgeDismissed(true);
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M6 6l12 12M18 6L6 18"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
           <div className="mb-2 flex justify-center">
             <ModeSwitch
               active={researchMode ? "research" : "navo"}
@@ -1396,6 +1477,24 @@ export default function Chat({
                 if (file) handleAttachFile(file);
               }}
             />
+            {/* capture="environment" opens the device's native camera app
+                directly on mobile instead of a plain file picker; desktop
+                browsers ignore it and fall back to a file picker. The photo
+                goes through the same handleAttachFile pipeline as a document
+                upload -- extractTextFromFile routes image/* through on-device
+                OCR (see ocr.ts) so the scanned text becomes askable context. */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) handleAttachFile(file);
+              }}
+            />
             <textarea
               ref={textareaRef}
               rows={1}
@@ -1413,75 +1512,18 @@ export default function Chat({
             />
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
-                <button
-                  aria-label="Attach a file"
-                  className="glass-chip flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground-muted transition-colors hover:text-foreground disabled:opacity-30 sm:h-9 sm:w-9"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={streaming || attachingFile}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={agentMode}
-                  aria-label="Toggle automatic code running"
-                  title="Let the assistant run Python automatically to compute exact answers"
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 sm:h-9 sm:w-9 ${
-                    agentMode
-                      ? "glass-sheen bg-accent text-accent-foreground"
-                      : "glass-chip text-foreground-muted hover:text-foreground"
-                  }`}
-                  onClick={() => setAgentMode((v) => !v)}
-                  disabled={streaming || researchMode}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  aria-label="Connect MCP tool servers"
-                  title={
-                    isOnline
-                      ? "Connect external tool servers the assistant can call, with your confirmation each time"
-                      : "Needs an internet connection -- you're offline right now"
-                  }
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-30 sm:h-9 sm:w-9 ${
-                    enabledToolMap.size > 0
-                      ? "glass-sheen bg-accent text-accent-foreground"
-                      : "glass-chip text-foreground-muted hover:text-foreground"
-                  }`}
-                  onClick={() => {
-                    haptic("tap");
-                    setMcpServersModalOpen(true);
-                  }}
-                  disabled={streaming || !isOnline}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M9 3v4M15 3v4M6 7h12l-1 5a5 5 0 0 1-5 4h0a5 5 0 0 1-5-4L6 7z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path d="M12 16v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </button>
+                <ComposerActionsMenu
+                  onAttach={() => fileInputRef.current?.click()}
+                  onScan={() => cameraInputRef.current?.click()}
+                  attachDisabled={streaming || attachingFile}
+                  agentMode={agentMode}
+                  onToggleAgentMode={() => setAgentMode((v) => !v)}
+                  agentModeDisabled={streaming || researchMode}
+                  mcpEnabledCount={enabledToolMap.size}
+                  onOpenMcp={() => setMcpServersModalOpen(true)}
+                  mcpDisabled={streaming || !isOnline}
+                  disabled={streaming}
+                />
               </div>
               <div className="flex items-center gap-1">
                 <button
