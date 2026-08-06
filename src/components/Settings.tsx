@@ -20,6 +20,7 @@ import { haptic } from "@/lib/haptics";
 
 const REPO_URL = "https://github.com/Benedictpatrick/Web-based-local-OfflineLLM";
 const AUTHOR_NAME = "Benedict Patrick, Saidharshan";
+const PYPHONE_STUDIO_URL = "https://pyphone-studio.vercel.app/";
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -571,6 +572,22 @@ export default function Settings({
             action={null}
           />
           <Row label="Founders" action={<span className="text-sm text-foreground-muted">{AUTHOR_NAME}</span>} />
+          <Row
+            label="Another project"
+            action={
+              <a
+                href={PYPHONE_STUDIO_URL}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Try PyPhone Studio"
+                title="Try PyPhone Studio"
+                className="flex items-center opacity-90 transition-opacity hover:opacity-100"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logos/pyphone-studio.png" alt="PyPhone Studio" className="h-4 w-auto" />
+              </a>
+            }
+          />
           <Row
             label="FAQ"
             action={
