@@ -202,6 +202,11 @@ export default function ModelHub({
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className={TAG_CLASS}>{CATEGORY_LABELS[m.category]}</span>
                             <span className={TAG_CLASS}>~{m.sizeGB}GB</span>
+                            {m.isOwn && (
+                              <span className="rounded-md bg-[#6C5CE7]/15 px-1.5 py-0.5 text-xs font-medium text-[#6C5CE7]">
+                                Cyber
+                              </span>
+                            )}
                             {isActive && (
                               <span className="ml-auto shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-xs font-medium text-accent">
                                 Active

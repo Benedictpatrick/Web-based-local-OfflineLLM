@@ -187,6 +187,29 @@ const CODE_PROMPT =
 const CODE_RE =
   /\b(code|program|programme|script|function|method|class|implement|algorithm|snippet|debug|fix (this|my)|error in|write.*(loop|api|query)|python|javascript|typescript|java|c\+\+|c#|golang|rust|kotlin|swift|sql|html|css|bash|regex)\b/i;
 
+// Base-model chat data bleeds through fine-tunes: Cipheron (a LoRA fine-tune
+// of Qwen2.5-Coder-0.5B-Instruct) answers "which model are you" with
+// Qwen/OpenAI's own identity claims from its pretraining, not Cipheron's.
+// Appended to whichever system prompt is in play so it overrides that
+// without needing a separate canned-answer branch like FOUNDER_RE. The base
+// architecture is deliberately never named here -- the goal isn't just to
+// supply the right answer, it's to keep the model from ever surfacing "Qwen"
+// or "fine-tuned" on its own.
+const MODEL_IDENTITY_OVERRIDES: Partial<Record<ModelId, string>> = {
+  "cipheron-0.5b":
+    "Your name is Cipheron, a compact model built by Benedict Patrick for secure code review. If asked what model/AI you are or who built/made/trained you, say you are Cipheron, built by Benedict Patrick -- never mention Qwen, OpenAI, Alibaba, or that you are a fine-tune of another model.",
+};
+
+// Answered directly, bypassing the model entirely: the identity-override
+// system prompt above is usually enough, but "who built Cipheron" is exactly
+// the kind of factual-attribution question small models are unreliable at
+// (same reasoning as FOUNDER_ANSWER/FOUNDER_RE above) -- a canned answer
+// guarantees it never slips and names the base model instead.
+const CIPHERON_BUILDER_ANSWER = "Cipheron was built by Benedict Patrick.";
+
+const CIPHERON_BUILDER_RE =
+  /\bwho\s+(made|makes|builds?|built|creates?|created|founded|founds?|develops?|developed|designed|designs?|trains?|trained|owns?|is\s+behind)\s+cipheron\b|\bcipheron'?s?\s+(founder|creator|maker|owner|developer|builder)s?\b|\b(founder|creator|maker|owner|developer|builder)s?\s+of\s+cipheron\b/i;
+
 const AGENT_INSTRUCTIONS =
   "\n\nYou can run Python to compute exact answers. If the question needs a calculation, data processing, or verification you can't do reliably in your head, reply with ONLY a fenced ```python code block — the code fence and nothing else. Zero words before it, zero words after it, not even one sentence like \"this is a large number\" or \"let me compute this\". Just the code fence, full stop. Its output will be shown to you next, and you must then give the final answer in plain language using that output. Only do this when real computation is needed; for everything else, answer normally without code.";
 
@@ -504,9 +527,25 @@ export default function Chat({
       return;
     }
 
+    if (CIPHERON_BUILDER_RE.test(userText)) {
+      await db.chat.add({
+        conversationId: activeConversationId,
+        role: "assistant",
+        content: CIPHERON_BUILDER_ANSWER,
+        createdAt: Date.now(),
+      });
+      await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
+      return;
+    }
+
+    const identityOverride = MODEL_IDENTITY_OVERRIDES[modelId];
+
     if (SMALL_TALK_RE.test(userText.trim())) {
       await streamReply([
-        { role: "system", content: SMALL_TALK_PROMPT },
+        {
+          role: "system",
+          content: SMALL_TALK_PROMPT + (identityOverride ? ` ${identityOverride}` : ""),
+        },
         { role: "user", content: userText },
       ], activeConversationId);
       return;
@@ -544,12 +583,14 @@ export default function Chat({
       .slice(-MAX_HISTORY_MESSAGES)
       .map((m): ChatCompletionMessage => ({ role: m.role, content: m.content }));
 
-    const systemPrompt = isCodeRequest
-      ? CODE_PROMPT
-      : SYSTEM_PROMPT +
-        (MATH_RE.test(userText) ? MATH_INSTRUCTIONS : "") +
-        (agentMode ? AGENT_INSTRUCTIONS : "") +
-        (isOnline ? buildMcpInstructions(enabledToolMap) : "");
+    const systemPrompt =
+      (isCodeRequest
+        ? CODE_PROMPT
+        : SYSTEM_PROMPT +
+          (MATH_RE.test(userText) ? MATH_INSTRUCTIONS : "") +
+          (agentMode ? AGENT_INSTRUCTIONS : "") +
+          (isOnline ? buildMcpInstructions(enabledToolMap) : "")) +
+      (identityOverride ? ` ${identityOverride}` : "");
     await streamReply(
       [
         { role: "system", content: systemPrompt + (contextBlock ? `\n\n${contextBlock}` : "") },

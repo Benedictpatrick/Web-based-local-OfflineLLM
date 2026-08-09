@@ -36,6 +36,24 @@ export interface ModelEntry {
   category: ModelCategory;
   /** Who makes this model, for the Hub's company filter and badge. */
   provider: Provider;
+  /** True for models made by this app's own team/user, not a third-party
+   *  release. Pinned to the top of the picker and flagged with a badge. */
+  isOwn?: boolean;
+  /** For a WebGPU (mlcId) entry whose converted weights live outside
+   *  web-llm's built-in prebuiltAppConfig (e.g. our own fine-tunes) --
+   *  supplies the extra AppConfig entry loadWebgpuEngine injects for it. */
+  mlcSelfHosted?: {
+    /** URL serving the converted MLC weights (a folder with
+     *  mlc-chat-config.json + ndarray-cache.json), e.g. an HF repo. */
+    modelUrl: string;
+    /** model_id of a built-in prebuiltAppConfig entry with the same base
+     *  architecture and quantization -- its compiled WebGPU kernel
+     *  (model_lib) is weight-independent, so a fine-tune of that same base
+     *  can reuse it as-is instead of needing its own MLC compile. */
+    reuseModelLibFrom: string;
+    vramRequiredMB: number;
+    contextWindowSize?: number;
+  };
 }
 
 /** The original 3 models: hand-verified on both WebGPU and WASM, and the
@@ -224,6 +242,18 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
     category: "uncensored",
     provider: "meta",
   },
+  // This app's own model, no MLC build -- same WASM-only pattern as above.
+  {
+    id: "cipheron-0.5b",
+    label: "Cipheron 0.5B (secure code review, ~0.5GB)",
+    repo: "bencodez/Cipheron",
+    file: "Cipheron-Q8_0.gguf",
+    hubDescription: "A compact model trained to spot common security vulnerabilities (SQL/command injection) and suggest fixes.",
+    sizeGB: 0.5,
+    category: "coding",
+    provider: "cipheron",
+    isOwn: true,
+  },
 ];
 
 export type ModelId = (typeof AVAILABLE_MODELS)[number]["id"];
@@ -406,7 +436,7 @@ export async function loadEngine(
   // currently active for getEngineKind() -- it must not gate this decision.
   if (!isWasmOnly(model) && (await hasWebGpu())) {
     try {
-      await loadWebgpuEngine(model.mlcId!, onProgress);
+      await loadWebgpuEngine(model, onProgress);
       engineKind = "webgpu";
       loadedModelId = modelId;
       return;
@@ -448,10 +478,43 @@ const CHAT_OPTS_OVERRIDES: Partial<Record<string, WebllmChatOptions>> = {
   "gemma3-1b-it-q4f16_1-MLC": { context_window_size: -1 },
 };
 
-async function loadWebgpuEngine(
+/** Builds the extra AppConfig entry for a self-hosted MLC model, reusing the
+ *  compiled WebGPU kernel of the built-in model named by
+ *  `mlcSelfHosted.reuseModelLibFrom` -- see ModelEntry.mlcSelfHosted. */
+async function selfHostedAppConfig(
   mlcId: string,
+  selfHosted: NonNullable<ModelEntry["mlcSelfHosted"]>
+): Promise<import("@mlc-ai/web-llm").AppConfig> {
+  const webllm = await import("@mlc-ai/web-llm");
+  const base = webllm.prebuiltAppConfig;
+  const libSource = base.model_list.find((m) => m.model_id === selfHosted.reuseModelLibFrom);
+  if (!libSource) {
+    throw new Error(`Unknown reuseModelLibFrom model_id: ${selfHosted.reuseModelLibFrom}`);
+  }
+  return {
+    ...base,
+    model_list: [
+      ...base.model_list,
+      {
+        model: selfHosted.modelUrl,
+        model_id: mlcId,
+        model_lib: libSource.model_lib,
+        vram_required_MB: selfHosted.vramRequiredMB,
+        low_resource_required: libSource.low_resource_required,
+        overrides:
+          selfHosted.contextWindowSize !== undefined
+            ? { context_window_size: selfHosted.contextWindowSize }
+            : libSource.overrides,
+      },
+    ],
+  };
+}
+
+async function loadWebgpuEngine(
+  model: ModelEntry,
   onProgress?: (progress: ProgressInfo) => void
 ): Promise<MLCEngine> {
+  const mlcId = model.mlcId!;
   if (webllmEngine) {
     await webllmEngine.unload().catch(() => {});
     webllmEngine = null;
@@ -464,9 +527,13 @@ async function loadWebgpuEngine(
     (async () => {
       try {
         const webllm = await import("@mlc-ai/web-llm");
+        const appConfig = model.mlcSelfHosted
+          ? await selfHostedAppConfig(mlcId, model.mlcSelfHosted)
+          : undefined;
         const engine = await webllm.CreateMLCEngine(
           mlcId,
           {
+            appConfig,
             initProgressCallback: (report) => {
               touch();
               onProgress?.({

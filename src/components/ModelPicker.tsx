@@ -45,7 +45,7 @@ export default function ModelPicker({
   const selectedDisplay = selected ? modelDisplayParts(selected) : null;
   const listedModels = AVAILABLE_MODELS.filter(
     (m) => !isWebgpuOnly(m) || cached[m.id] || m.id === value,
-  );
+  ).sort((a, b) => Number(!!b.isOwn) - Number(!!a.isOwn));
 
   useEffect(() => {
     if (!open) return;
@@ -220,7 +220,14 @@ export default function ModelPicker({
                 >
                   <BrandMark provider={m.provider} size={14} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate">{name}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate">{name}</span>
+                      {m.isOwn && (
+                        <span className="shrink-0 rounded-md bg-[#6C5CE7]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#6C5CE7]">
+                          Cyber
+                        </span>
+                      )}
+                    </span>
                     {meta && (
                       <span className="block truncate text-xs text-foreground-muted/70">{meta}</span>
                     )}
