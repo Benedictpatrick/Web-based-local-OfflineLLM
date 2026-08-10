@@ -17,6 +17,7 @@ import {
   getLoadedContextSize,
   hasWebGpu,
   isModelCached,
+  isWasmUsingWebGpu,
   requestPersistentStorage,
   isWasmSupported,
   loadEngine,
@@ -1218,7 +1219,13 @@ export default function Chat({
               <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-surface px-3 py-2">
                 <span>Engine</span>
                 <span className="text-foreground">
-                  {engine === "webgpu" ? "WebGPU (GPU)" : engine === "wasm" ? "WASM (CPU)" : "—"}
+                  {engine === "webgpu"
+                    ? "WebGPU (GPU)"
+                    : engine === "wasm"
+                      ? isWasmUsingWebGpu()
+                        ? "WASM (WebGPU)"
+                        : "WASM (CPU)"
+                      : "—"}
                 </span>
                 <span>Device</span>
                 <span className="text-foreground">

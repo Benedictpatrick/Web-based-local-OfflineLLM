@@ -19,12 +19,16 @@ export type ModelCategory =
 export interface ModelEntry {
   id: string;
   label: string;
-  /** MLC-format id used by the WebGPU (web-llm) engine. Omit for models with
-   *  no MLC-compiled build available -- these only run on WASM regardless of
-   *  whether the device supports WebGPU. See isWasmOnly. */
+  /** MLC-format id used by the web-llm engine. Omit for models with no
+   *  MLC-compiled build available -- these route through the wllama engine
+   *  instead (see isWasmOnly/repo+file below). Note this is NOT the same as
+   *  "CPU only": wllama (>=3.1) has its own native WebGPU backend and
+   *  auto-offloads all layers to it whenever the browser supports WebGPU,
+   *  falling back to CPU only when it doesn't. */
   mlcId?: string;
-  /** GGUF repo/file used by the WASM (wllama) fallback engine. Models without
-   *  these only run on WebGPU — see webgpuOnly. */
+  /** GGUF repo/file used by the wllama engine (see mlcId doc above for what
+   *  that does and doesn't imply about GPU usage). Models without
+   *  these only run on the web-llm engine — see webgpuOnly. */
   repo?: string;
   file?: string;
   /** One-line blurb shown in the Model Hub browsing UI. */
@@ -687,6 +691,17 @@ export function getLoadedModelId(): ModelId | null {
 
 export function getEngineKind(): "webgpu" | "wasm" | null {
   return engineKind;
+}
+
+/** True when the loaded WASM-engine (wllama) model is actually running on
+ *  the browser's WebGPU backend rather than falling back to pure CPU. wllama
+ *  offloads all layers to WebGPU automatically whenever the browser supports
+ *  it (see loadWasmEngine's n_gpu_layers default) -- this is a *separate*
+ *  WebGPU path from the "webgpu" engineKind above, which refers to the
+ *  MLC/web-llm engine used for models with an mlcId. A "wasm" engineKind
+ *  does not mean CPU-only. */
+export function isWasmUsingWebGpu(): boolean {
+  return engineKind === "wasm" && !!wllama?.isSupportWebGPU();
 }
 
 export async function isModelCached(modelId: ModelId): Promise<boolean> {

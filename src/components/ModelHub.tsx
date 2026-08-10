@@ -226,7 +226,8 @@ export default function ModelHub({
                           )}
                           {isWasmOnly(m) && (
                             <p className="mt-1 text-xs text-foreground-muted">
-                              Runs on CPU only — no GPU-accelerated build exists for this model.
+                              Uses your browser&apos;s WebGPU automatically when available, falling
+                              back to CPU otherwise.
                             </p>
                           )}
                           {tooLarge && (
