@@ -137,9 +137,26 @@ export function setUserName(name: string | null): void {
  *  plus a correction to Navo's prior reply if the message reads as one (pass
  *  the reply it might be correcting via priorAssistantText). Meant to run
  *  after the reply streams, never on the path to the first token. */
-export async function saveExtractedMemories(
+// Reads all memories into `existing` once, then mutates that snapshot and
+// IndexedDB together across an await loop below -- two overlapping calls
+// would each work off a stale snapshot and could double-write past
+// MAX_MEMORIES or miss a duplicate the other just added. Chaining onto the
+// previous call's completion keeps saves serialized, same fix as
+// pythonRunner.ts's runQueue.
+let saveQueue: Promise<unknown> = Promise.resolve();
+
+export function saveExtractedMemories(
   userText: string,
   priorAssistantText: string | null = null
+): Promise<void> {
+  const run = saveQueue.then(() => saveExtractedMemoriesExclusive(userText, priorAssistantText));
+  saveQueue = run.catch(() => {});
+  return run;
+}
+
+async function saveExtractedMemoriesExclusive(
+  userText: string,
+  priorAssistantText: string | null
 ): Promise<void> {
   const facts = extractMemories(userText);
   const correction = extractCorrection(userText, priorAssistantText);
