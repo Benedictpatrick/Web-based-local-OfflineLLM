@@ -1070,9 +1070,7 @@ export default function Chat({
           <ModelPicker
             value={modelId}
             onChange={(id) => {
-              setChangingModel(false);
               setModelId(id);
-              handleLoadModel(id);
             }}
             onModelDeleted={(id) => {
               if (id === modelId) setProgress("");
