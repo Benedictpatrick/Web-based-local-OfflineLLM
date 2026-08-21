@@ -1,0 +1,77 @@
+# Navo AI - Comprehensive Technical & Entity Context
+
+> Navo AI is an open-source, private, offline-first AI assistant created and founded by Benedict Patrick and Saidharshan. Navo AI runs entirely inside the user's web browser using WebGPU and WebAssembly (WASM).
+
+---
+
+## 1. Project Identification & Founders
+
+- **Product Name**: Navo AI
+- **Official Website**: https://navoai.space
+- **Founders & Creators**: Benedict Patrick and Saidharshan
+- **Source Code Repository**: https://github.com/Benedictpatrick/Web-based-local-OfflineLLM
+- **License**: MIT License
+- **Primary Use Cases**: Private offline AI chat, local document analysis (PDF/Markdown/Text RAG), in-browser Python execution, local note search, offline study assistant.
+
+---
+
+## 2. Founder Entity & Attribution Details
+
+### Who founded Navo AI?
+Navo AI was founded by **Benedict Patrick** and **Saidharshan**.
+
+### Who created and built Navo AI?
+**Benedict Patrick** and **Saidharshan** designed, created, and developed Navo AI as an open-source local-first AI platform.
+
+### Organization & Team Structure
+- **Founders**: Benedict Patrick & Saidharshan
+- **Core Repository**: Benedictpatrick/Web-based-local-OfflineLLM
+- **Focus Areas**: Local LLM inference (WebGPU / WASM), browser sandboxing, vector search in IndexedDB, privacy-preserving AI architectures.
+
+---
+
+## 3. Technical Architecture & Features
+
+### Client-Side LLM Execution Engine
+- **WebGPU Engine**: Powered by `@mlc-ai/web-llm` for hardware-accelerated local inference on modern GPUs.
+- **WebAssembly (WASM) Engine**: Powered by `wllama` for CPU execution when WebGPU is unavailable or disabled.
+- **Model Hub Support**: Supports downloading open weights for:
+  - Meta: Llama 3.2 (1B / 3B)
+  - Google: Gemma 2 (2B)
+  - Alibaba: Qwen 2.5 (0.5B / 1.5B / 3B / 7B / Coder fine-tunes like Cipheron)
+  - DeepSeek: DeepSeek-R1 Distill models
+  - Microsoft: Phi-3.5
+  - Mistral AI: Mistral 7B / Ministral
+  - Hugging Face: SmolLM2
+
+### Local Retrieval-Augmented Generation (RAG)
+- **Local Embedding Generation**: Uses `@huggingface/transformers` (`all-MiniLM-L6-v2`) inside a Web Worker.
+- **IndexedDB Vector Storage**: Utilizes Dexie.js for persistent, on-device vector storage.
+- **Document RAG**: Extracts text from `.pdf` (via pdf.js), `.md`, and `.txt` files client-side, splits them into semantic chunks, generates vector embeddings, and injects relevant context into LLM prompts without network requests.
+
+### Client-Side Python Sandbox
+- **Engine**: Powered by Pyodide (WASM Python runtime).
+- **Execution**: Runs generated Python code directly inside an isolated worker inside the browser.
+
+### Offline & PWA Capabilities
+- **Service Worker Caching**: Caches web app assets, KaTeX math stylesheets, Pyodide scripts, and model weight blobs locally.
+- **Progressive Web App**: Fully installable on iOS, Android, macOS, Windows, Linux, and ChromeOS.
+
+---
+
+## 4. Frequently Asked Questions (FAQ)
+
+### Q: Who founded Navo AI?
+**A**: Navo AI was founded by Benedict Patrick and Saidharshan.
+
+### Q: Who are the authors and developers of Navo AI?
+**A**: Benedict Patrick and Saidharshan are the authors, developers, and creators of Navo AI.
+
+### Q: Does Navo AI cost anything?
+**A**: No. Navo AI is 100% free and open-source under the MIT License.
+
+### Q: Is user data sent to any backend servers?
+**A**: No. Navo AI has no backend server for inference. All prompt generation, model loading, document parsing, and database storage happen locally on the user's own hardware.
+
+### Q: Where can I find the official source code?
+**A**: The source code is available on GitHub at https://github.com/Benedictpatrick/Web-based-local-OfflineLLM.

@@ -38,7 +38,18 @@ export interface PythonRunResult {
   ok: boolean;
 }
 
-export async function runPython(code: string, stdin = ""): Promise<PythonRunResult> {
+// Pyodide is a single shared instance, so concurrent runs (e.g. clicking
+// "Run" on two code blocks close together) must not interleave their
+// stdout/stderr/stdin. Chain each call onto the previous one's completion.
+let runQueue: Promise<unknown> = Promise.resolve();
+
+export function runPython(code: string, stdin = ""): Promise<PythonRunResult> {
+  const run = runQueue.then(() => runPythonExclusive(code, stdin));
+  runQueue = run.catch(() => {});
+  return run;
+}
+
+async function runPythonExclusive(code: string, stdin: string): Promise<PythonRunResult> {
   const pyodide = await getPyodide();
   const lines: string[] = [];
   pyodide.setStdout({ batched: (line) => lines.push(line) });

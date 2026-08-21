@@ -18,35 +18,66 @@ const SITE_URL = "https://navoai.space";
 const SITE_TITLE = "Navo AI: Private Offline AI Assistant";
 const SITE_DESCRIPTION =
   "Navo AI, founded by Benedict Patrick and Saidharshan, is a private, offline AI assistant that runs entirely in your browser: no server, no signup, no internet needed after setup. Chat, run code, and download open models like Llama, Gemma, and Qwen.";
-const FOUNDERS = [
-  { "@type": "Person", name: "Benedict Patrick" },
-  { "@type": "Person", name: "Saidharshan" },
-];
-
-const SOFTWARE_JSON_LD = {
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: "Navo AI",
-  applicationCategory: "EducationalApplication",
-  operatingSystem: "Any modern web browser",
-  description: SITE_DESCRIPTION,
-  url: SITE_URL,
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "USD",
-  },
-  author: FOUNDERS,
+const FOUNDER_BENEDICT = {
+  "@type": "Person",
+  "@id": `${SITE_URL}/#benedict-patrick`,
+  name: "Benedict Patrick",
+  jobTitle: "Co-Founder",
+  worksFor: { "@id": `${SITE_URL}/#organization` },
+  sameAs: ["https://github.com/Benedictpatrick"],
 };
 
-const ORGANIZATION_JSON_LD = {
+const FOUNDER_SAIDHARSHAN = {
+  "@type": "Person",
+  "@id": `${SITE_URL}/#saidharshan`,
+  name: "Saidharshan",
+  jobTitle: "Co-Founder",
+  worksFor: { "@id": `${SITE_URL}/#organization` },
+};
+
+const GRAPH_JSON_LD = {
   "@context": "https://schema.org",
-  "@type": "Organization",
-  name: "Navo AI",
-  url: SITE_URL,
-  logo: `${SITE_URL}/navo-wordmark.png`,
-  founder: FOUNDERS,
-  sameAs: ["https://github.com/Benedictpatrick/Web-based-local-OfflineLLM"],
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: "Navo AI",
+      url: SITE_URL,
+      logo: `${SITE_URL}/navo-wordmark.png`,
+      founder: [
+        { "@id": `${SITE_URL}/#benedict-patrick` },
+        { "@id": `${SITE_URL}/#saidharshan` },
+      ],
+      sameAs: ["https://github.com/Benedictpatrick/Web-based-local-OfflineLLM"],
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${SITE_URL}/#software`,
+      name: "Navo AI",
+      applicationCategory: "EducationalApplication",
+      operatingSystem: "Any modern web browser",
+      description: SITE_DESCRIPTION,
+      url: SITE_URL,
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+      },
+      author: [
+        { "@id": `${SITE_URL}/#benedict-patrick` },
+        { "@id": `${SITE_URL}/#saidharshan` },
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      url: SITE_URL,
+      name: "Navo AI",
+      publisher: { "@id": `${SITE_URL}/#organization` },
+    },
+    FOUNDER_BENEDICT,
+    FOUNDER_SAIDHARSHAN,
+  ],
 };
 
 export const metadata: Metadata = {
@@ -60,6 +91,12 @@ export const metadata: Metadata = {
   keywords: [
     "Navo AI",
     "Navo",
+    "Benedict Patrick",
+    "Saidharshan",
+    "Benedict Patrick Saidharshan",
+    "who founded Navo AI",
+    "Navo AI founders",
+    "Navo AI creators",
     "offline AI",
     "offline AI assistant",
     "offline AI chat",
@@ -69,9 +106,6 @@ export const metadata: Metadata = {
     "AI study assistant",
     "run AI without internet",
     "browser based AI chat",
-    "who founded Navo AI",
-    "Navo AI founders",
-    "Benedict Patrick Saidharshan",
   ],
   authors: [{ name: "Benedict Patrick" }, { name: "Saidharshan" }],
   manifest: "/manifest.json",
@@ -126,11 +160,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(SOFTWARE_JSON_LD) }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(GRAPH_JSON_LD) }}
         />
         {/* Applied before first paint so an explicit Light/Dark choice doesn't
          * flash the system-preference theme first. */}

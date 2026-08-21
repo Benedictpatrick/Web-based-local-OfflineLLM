@@ -1,10 +1,9 @@
-import type { ChatCompletionMessage } from "@wllama/wllama/esm/index.js";
 import { describe, expect, it, vi } from "vitest";
 import { decomposeQuestion, proposeClarifyingQuestion, runResearch, type GenerateOnceFn } from "./research";
 
 function fakeGenerate(...responses: string[]): GenerateOnceFn & ReturnType<typeof vi.fn> {
   let call = 0;
-  return vi.fn(async (_messages: ChatCompletionMessage[]) => ({
+  return vi.fn<GenerateOnceFn>(async () => ({
     text: responses[Math.min(call++, responses.length - 1)],
     aborted: false,
   }));

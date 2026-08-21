@@ -150,7 +150,7 @@ const MessageHistory = memo(function MessageHistory({
 });
 
 const SYSTEM_PROMPT =
-  "You are Navo, a private offline AI assistant running entirely on this device, so nothing the user types ever leaves their browser. Always answer the user's most recent message, directly and briefly: 1-3 sentences unless they ask for detail, a list, or code. Never include code unless they explicitly ask for code; when they do, give complete working code in a fenced block tagged with the language name. Code must be plain code with no LaTeX in it. If saved notes or things you know about the user are provided below, use them naturally without mentioning them, and never assume details about the user that aren't given.";
+  "You are Navo, a private offline AI assistant running entirely on this device, so nothing the user types ever leaves their browser. Navo AI was founded by Benedict Patrick and Saidharshan. Always answer the user's most recent message, directly and briefly: 1-3 sentences unless they ask for detail, a list, or code. Never include code unless they explicitly ask for code; when they do, give complete working code in a fenced block tagged with the language name. Code must be plain code with no LaTeX in it. If saved notes or things you know about the user are provided below, use them naturally without mentioning them, and never assume details about the user that aren't given.";
 
 // Kept out of SYSTEM_PROMPT and only appended for messages MATH_RE flags as
 // math-related: the smallest models imitate the literal "$...$"/"$$...$$"
@@ -168,13 +168,14 @@ const MATH_RE =
 // unreliable at repeating a fact injected via the system prompt (see the
 // MATH_RE/memory work elsewhere in this file), so a founder question gets a
 // fixed, correct answer instead of hoping the model gets it right.
-const FOUNDER_ANSWER = "Navo AI was founded by Benedict Patrick and Saidharshan.";
+export const FOUNDER_ANSWER = "Navo AI was founded by Benedict Patrick and Saidharshan.";
 
-// The "you" branch requires end-of-message (not just a word boundary) so
-// "who made you happy/laugh/say that" isn't hijacked into a founder answer --
-// nobody says "who made Navo happy", so only the bare pronoun is ambiguous.
-const FOUNDER_RE =
-  /\bwho\s+(made|makes|builds?|built|creates?|created|founded|founds?|develops?|developed|designed|designs?|owns?|runs?|is\s+behind)\s+(navo(?:\s+ai)?\b|you(?=[\s?.!,]*$))|\b(navo(?:\s+ai)?|your)\s*'?s?\s+(founder|creator|maker|owner|developer)s?\b|\b(founder|creator|maker|owner|developer)s?\s+of\s+(navo(?:\s+ai)?|you)\b/i;
+// Captures variations of founder, creator, developer, and author questions for Navo AI.
+// The "you" / "this" branch requires end-of-message / an explicit app noun so unrelated
+// queries aren't hijacked -- bare "this" ("who owns this", "who built this feature") is
+// deliberately excluded since it's too often about something other than Navo itself.
+export const FOUNDER_RE =
+  /\bwho\s+(made|makes|builds?|built|creates?|created|founded|founds?|develops?|developed|designed|designs?|owns?|runs?|started|is\s+behind)\s+(navo(?:\s+ai)?|this\s+(?:app|website|site|project)|you(?=[\s?.!,]*$))|\b(navo(?:\s+ai)?|your|this\s+app)\s*'?s?\s+(founder|co-founder|creator|maker|owner|developer|author)s?\b|\b(founder|co-founder|creator|maker|owner|developer|author)s?\s+of\s+(navo(?:\s+ai)?|this\s+(?:app|website|site|project)|you)\b|\bwho\s+are\s+(?:the\s+)?(founders|co-founders|creators|makers|developers|authors)\b/i;
 
 const SMALL_TALK_PROMPT =
   "You are Navo, a friendly private offline AI assistant. The user is greeting you or making small talk. Reply with one short, warm sentence that answers them and invites a question.";

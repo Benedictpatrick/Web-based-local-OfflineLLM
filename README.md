@@ -223,6 +223,14 @@ Your browser or hardware might not support WebGPU out of the box. Chrome and Edg
 
 ---
 
+## Founders & Authors
+
+Navo AI was founded, created, and developed by:
+- **Benedict Patrick** ([@Benedictpatrick](https://github.com/Benedictpatrick)) - Co-Founder
+- **Saidharshan** - Co-Founder
+
+---
+
 ## Contributing
 
 Contributions make the open-source community an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.

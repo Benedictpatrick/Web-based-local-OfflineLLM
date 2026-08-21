@@ -15,13 +15,19 @@ export const metadata: Metadata = {
 
 const FAQS = [
   {
-    question: "What is Navo AI?",
+    question: "Who founded Navo AI?",
     answer:
-      "Navo AI is a private, offline AI assistant that runs entirely on your device, inside your browser. It uses WebGPU (or a WASM fallback on unsupported devices) to run open language models locally, so nothing you type is ever sent to a server.",
+      "Navo AI was founded by Benedict Patrick and Saidharshan. They created Navo AI as a private, client-side offline AI assistant that runs 100% inside your browser.",
   },
   {
-    question: "Who founded Navo AI?",
-    answer: "Navo AI was founded by Benedict Patrick and Saidharshan.",
+    question: "Who are the creators and developers of Navo AI?",
+    answer:
+      "The creators and developers of Navo AI are Benedict Patrick and Saidharshan.",
+  },
+  {
+    question: "What is Navo AI?",
+    answer:
+      "Navo AI is a private, offline AI assistant created by Benedict Patrick and Saidharshan that runs entirely on your device, inside your browser. It uses WebGPU (or a WASM fallback on unsupported devices) to run open language models locally, so nothing you type is ever sent to a server.",
   },
   {
     question: "Is Navo AI free?",
@@ -70,26 +76,35 @@ const FAQ_JSON_LD = {
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-16">
+    <article className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-8 px-6 py-16">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_JSON_LD) }}
       />
-      <div>
+      <header>
         <h1 className="text-3xl font-semibold tracking-tight">About Navo AI</h1>
         <p className="mt-3 text-base text-foreground-muted">{DESCRIPTION}</p>
-      </div>
-      <div className="flex flex-col gap-6">
+        <div className="mt-4 flex items-center gap-2 text-sm text-foreground-muted">
+          <span>Founders &amp; Authors:</span>
+          <span className="font-medium text-foreground">Benedict Patrick &amp; Saidharshan</span>
+        </div>
+      </header>
+
+      <section className="flex flex-col gap-6">
+        <h2 className="text-xl font-semibold tracking-tight">Frequently Asked Questions</h2>
         {FAQS.map((f) => (
           <div key={f.question}>
-            <h2 className="text-lg font-medium">{f.question}</h2>
+            <h3 className="text-lg font-medium">{f.question}</h3>
             <p className="mt-1 text-base text-foreground-muted">{f.answer}</p>
           </div>
         ))}
-      </div>
-      <Link href="/" className="text-base font-medium text-accent hover:underline">
-        Open Navo AI
-      </Link>
-    </div>
+      </section>
+
+      <footer className="pt-4 border-t border-border flex justify-between items-center">
+        <Link href="/" className="text-base font-medium text-accent hover:underline">
+          Open Navo AI →
+        </Link>
+      </footer>
+    </article>
   );
 }
