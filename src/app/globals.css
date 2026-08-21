@@ -298,6 +298,45 @@ body {
   }
 }
 
+/* Looping shimmer across the wordmark itself on the first-run model picker:
+ * a light highlight sweeps left-to-right over the letters, like light
+ * catching brushed metal. The wordmark is a flat PNG (no live text to
+ * gradient-clip), so a sibling element re-uses it as a mask and screens a
+ * moving gradient through that mask over the real image beneath it. */
+@keyframes picker-wordmark-shimmer {
+  0%, 20% { background-position: 200% 0; }
+  70%, 100% { background-position: -100% 0; }
+}
+
+.picker-wordmark-shimmer {
+  -webkit-mask-image: url("/navo-wordmark.png");
+  mask-image: url("/navo-wordmark.png");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.9) 50%,
+    transparent 65%
+  );
+  background-size: 250% 100%;
+  background-position: 200% 0;
+  mix-blend-mode: screen;
+  animation: picker-wordmark-shimmer 3.2s ease-in-out infinite;
+  animation-delay: 0.6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picker-wordmark-shimmer {
+    animation: none;
+    background: none;
+  }
+}
+
 .glass-bar {
   background: color-mix(in srgb, var(--background) 72%, transparent);
   backdrop-filter: blur(16px) saturate(160%);

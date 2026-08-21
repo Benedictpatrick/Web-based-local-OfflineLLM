@@ -1024,9 +1024,10 @@ export default function Chat({
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
         {!hasLoadedOnce && (
           <>
-            <h1 className="mb-1">
+            <h1 className="relative mb-1 inline-block h-10 w-auto">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/navo-wordmark.png" alt="Navo AI" className="h-10 w-auto" />
+              <span aria-hidden className="picker-wordmark-shimmer absolute inset-0" />
             </h1>
             <p className="max-w-xs text-sm text-foreground-muted">
               Navo AI is a private, offline AI assistant that runs entirely on this device.
