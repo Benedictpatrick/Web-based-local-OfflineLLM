@@ -43,7 +43,7 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains",
           },
-          { key: "Content-Security-Policy-Report-Only", value: CSP },
+          { key: "Content-Security-Policy", value: CSP },
         ],
       },
     ];
