@@ -31,9 +31,14 @@ describe("GEO & Founder Query Intent Recognition", () => {
     "Who built this?",
     "Who runs this feature?",
     "Who made this happen?",
+    "who made navodaya",
+    "who owns navosphere",
+    "who built this apple pie",
+    "Who are the founders of Tesla?",
+    "Who are the developers of Linux?",
   ];
 
-  it.each(nonMatchingQueries)("does not match unrelated 'this' query: %s", (query) => {
+  it.each(nonMatchingQueries)("does not match unrelated query: %s", (query) => {
     expect(FOUNDER_RE.test(query)).toBe(false);
   });
 

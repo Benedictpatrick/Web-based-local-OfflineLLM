@@ -24,12 +24,21 @@ self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
 
+const CACHE_NAME_PREFIX = "offline-companion-shell-";
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== CACHE_NAME)
+          // Cache Storage is origin-wide, not scoped to this worker: other
+          // code on this origin also uses it directly for its own caches
+          // (e.g. @mlc-ai/web-llm stores downloaded WebGPU model weights in
+          // buckets named "webllm/model" etc., completely outside this
+          // shell cache). Only ever delete OUR OWN prior-version shell
+          // caches here -- deleting anything else was silently wiping
+          // users' multi-GB downloaded models on every activation.
+          .filter((key) => key.startsWith(CACHE_NAME_PREFIX) && key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       )
     )

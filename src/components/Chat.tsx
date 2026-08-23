@@ -174,8 +174,13 @@ export const FOUNDER_ANSWER = "Navo AI was founded by Benedict Patrick and Saidh
 // The "you" / "this" branch requires end-of-message / an explicit app noun so unrelated
 // queries aren't hijacked -- bare "this" ("who owns this", "who built this feature") is
 // deliberately excluded since it's too often about something other than Navo itself.
+// Every "navo"/"this app" alternative is \b-terminated so it can't match as a prefix of
+// an unrelated word ("navodaya", "this apple"), and the bare "who are the founders"
+// branch excludes anything followed by "of ..." so "who are the founders of Tesla"
+// doesn't get hijacked -- that case already needs to name Navo/this app/you explicitly
+// via the "founder(s) of ..." branch below it.
 export const FOUNDER_RE =
-  /\bwho\s+(made|makes|builds?|built|creates?|created|founded|founds?|develops?|developed|designed|designs?|owns?|runs?|started|is\s+behind)\s+(navo(?:\s+ai)?|this\s+(?:app|website|site|project)|you(?=[\s?.!,]*$))|\b(navo(?:\s+ai)?|your|this\s+app)\s*'?s?\s+(founder|co-founder|creator|maker|owner|developer|author)s?\b|\b(founder|co-founder|creator|maker|owner|developer|author)s?\s+of\s+(navo(?:\s+ai)?|this\s+(?:app|website|site|project)|you)\b|\bwho\s+are\s+(?:the\s+)?(founders|co-founders|creators|makers|developers|authors)\b/i;
+  /\bwho\s+(made|makes|builds?|built|creates?|created|founded|founds?|develops?|developed|designed|designs?|owns?|runs?|started|is\s+behind)\s+(navo(?:\s+ai)?|this\s+(?:app|website|site|project)|you(?=[\s?.!,]*$))\b|\b(navo(?:\s+ai)?|your|this\s+app)\b\s*'?s?\s+(founder|co-founder|creator|maker|owner|developer|author)s?\b|\b(founder|co-founder|creator|maker|owner|developer|author)s?\s+of\s+(navo(?:\s+ai)?|this\s+(?:app|website|site|project)|you)\b|\bwho\s+are\s+(?:the\s+)?(founders|co-founders|creators|makers|developers|authors)\b(?!\s+of\b)/i;
 
 const SMALL_TALK_PROMPT =
   "You are Navo, a friendly private offline AI assistant. The user is greeting you or making small talk. Reply with one short, warm sentence that answers them and invites a question.";
