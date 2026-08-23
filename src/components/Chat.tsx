@@ -10,6 +10,7 @@ import {
   type GenerationStats,
   type ModelId,
   abortGeneration,
+  defaultReplyMaxTokens,
   getDefaultModelId,
   getDeviceInfo,
   getEngineKind,
@@ -734,6 +735,7 @@ export default function Chat({
 
         const result = await generateOnce(messages, {
           temperature: opts?.temperature,
+          maxTokens: defaultReplyMaxTokens(),
           onDelta: (text) => setDraftReply(prefix + text),
           onEngineLost: () => handleLoadModel(modelId),
         });

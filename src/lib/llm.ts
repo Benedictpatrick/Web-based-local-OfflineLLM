@@ -379,14 +379,19 @@ function isMobileDevice(): boolean {
   return typeof navigator !== "undefined" && /Mobi|Android/i.test(navigator.userAgent);
 }
 
-/** Reply-length ceiling used only when a caller doesn't pass its own
- *  maxTokens (research.ts's sub-question/synthesis passes always do, and are
- *  deliberately left alone). Halved on mobile so a single generation can't
- *  grow memory as far before finishing, on top of the existing n_ctx/n_batch
- *  caps -- those cut *input* memory pressure, this cuts *output* growth,
- *  which those didn't address. */
-function defaultMaxTokens(desktopDefault: number): number {
-  return isMobileDevice() ? Math.round(desktopDefault / 2) : desktopDefault;
+/** The engine's normal reply-length ceiling, halved on mobile so a single
+ *  generation can't grow memory as far before finishing -- additive to the
+ *  existing n_ctx/n_batch caps, which address *input*-side memory, not
+ *  output growth. Exported for explicit opt-in by callers that want the
+ *  mobile-safe default (Chat.tsx's ordinary reply path); NOT applied
+ *  automatically to every unspecified maxTokens, since research.ts's
+ *  single-pass/synthesis calls deliberately omit maxTokens to mean "the
+ *  engine's real default, uncapped" and must keep meaning that regardless
+ *  of device -- silently halving those would visibly truncate a research
+ *  report/summary, contradicting their own intent. */
+export function defaultReplyMaxTokens(): number {
+  const base = engineKind === "webgpu" ? 768 : 512;
+  return isMobileDevice() ? Math.round(base / 2) : base;
 }
 
 /** True when the browser reports <=2GB of device memory. Reports low on some devices
@@ -944,7 +949,7 @@ function createWebgpuCompletion(
     messages: messages as never,
     stream: true,
     stream_options: { include_usage: true },
-    max_tokens: opts?.maxTokens ?? defaultMaxTokens(768),
+    max_tokens: opts?.maxTokens ?? 768,
     temperature: opts?.temperature ?? 0.5,
     top_p: 0.9,
     repetition_penalty: 1.1,
@@ -1004,7 +1009,7 @@ async function* streamWasmChat(
     stream: true,
     timings_per_token: true,
     abortSignal: wasmAbortController.signal,
-    max_tokens: opts?.maxTokens ?? defaultMaxTokens(512),
+    max_tokens: opts?.maxTokens ?? 512,
     temp: opts?.temperature ?? 0.5,
     top_p: 0.9,
     min_p: 0.05,
