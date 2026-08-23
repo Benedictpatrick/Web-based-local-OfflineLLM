@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { clientIp, isRateLimited } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,9 @@ interface WebSearchResult {
 
 const MAX_RESULTS = 5;
 const MAX_QUERY_LENGTH = 300;
+/** Generous for normal use (nobody searches this often by hand); mainly
+ *  there to stop this open DuckDuckGo proxy from being hammered for scraping. */
+const RATE_LIMIT_PER_MINUTE = 20;
 
 function decodeEntities(text: string): string {
   return text
@@ -43,6 +47,10 @@ function extractRealUrl(ddgHref: string): string | null {
  * instant-answer boxes, not general web results, so it's not a substitute.
  */
 export async function GET(request: NextRequest) {
+  if (isRateLimited(clientIp(request), RATE_LIMIT_PER_MINUTE)) {
+    return Response.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const q = request.nextUrl.searchParams.get("q")?.trim().slice(0, MAX_QUERY_LENGTH);
   if (!q) {
     return Response.json({ results: [] satisfies WebSearchResult[] });

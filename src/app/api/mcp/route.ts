@@ -1,8 +1,14 @@
 import type { NextRequest } from "next/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { clientIp, isRateLimited } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
+
+/** This proxies arbitrary attacker-supplied https:// URLs server-side (see
+ *  the docstring below), so the limit is tighter than websearch's fixed
+ *  DuckDuckGo target -- mainly there to stop it being used as an open relay. */
+const RATE_LIMIT_PER_MINUTE = 15;
 
 type McpRequestBody =
   | { action: "listTools"; serverUrl: string }
@@ -49,6 +55,10 @@ function extractTextContent(result: unknown): string {
  * fresh per request rather than holding a session open.
  */
 export async function POST(request: NextRequest) {
+  if (isRateLimited(clientIp(request), RATE_LIMIT_PER_MINUTE)) {
+    return Response.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   let body: McpRequestBody;
   try {
     body = await request.json();
