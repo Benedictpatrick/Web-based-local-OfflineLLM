@@ -302,10 +302,14 @@ body {
  * a light highlight sweeps left-to-right over the letters, like light
  * catching brushed metal. The wordmark is a flat PNG (no live text to
  * gradient-clip), so a sibling element re-uses it as a mask and screens a
- * moving gradient through that mask over the real image beneath it. */
+ * moving gradient through that mask over the real image beneath it.
+ * The gradient layer lives on ::before and is moved with `transform`
+ * (compositor-only, no repaint per frame) rather than animating
+ * `background-position`, which forced a full repaint of the masked +
+ * blended layer on every frame and was visibly janky. */
 @keyframes picker-wordmark-shimmer {
-  0%, 20% { background-position: 200% 0; }
-  70%, 100% { background-position: -100% 0; }
+  0%, 20% { transform: translate3d(-45%, 0, 0); }
+  70%, 100% { transform: translate3d(45%, 0, 0); }
 }
 
 .picker-wordmark-shimmer {
@@ -317,21 +321,28 @@ body {
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
+  mix-blend-mode: screen;
+  overflow: hidden;
+}
+
+.picker-wordmark-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: -20% -80%;
   background: linear-gradient(
     115deg,
-    transparent 35%,
+    transparent 42%,
     rgba(255, 255, 255, 0.9) 50%,
-    transparent 65%
+    transparent 58%
   );
-  background-size: 250% 100%;
-  background-position: 200% 0;
-  mix-blend-mode: screen;
+  transform: translate3d(-45%, 0, 0);
   animation: picker-wordmark-shimmer 3.2s ease-in-out infinite;
   animation-delay: 0.6s;
+  will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .picker-wordmark-shimmer {
+  .picker-wordmark-shimmer::before {
     animation: none;
     background: none;
   }
