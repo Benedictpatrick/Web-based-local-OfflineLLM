@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { unstable_catchError, type ErrorInfo } from "next/error";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -82,23 +82,18 @@ export function normalizeMathDelimiters(markdown: string): string {
 
 const RUNNABLE_LANGUAGES = new Set(["python", "py"]);
 
-function CodeBlock({
-  language: rawLanguage,
-  code,
-  streaming,
-}: {
-  language: string;
-  code: string;
-  /** True while this message is still being generated. Skips the
-   *  SyntaxHighlighter (Prism) pass -- by far the most expensive part of
-   *  rendering a code block -- while the block is still growing character
-   *  by character, since that same expensive pass would otherwise re-run
-   *  on every streamed update. The block pops into full color once
-   *  generation finishes and this flips to false, same pattern most chat
-   *  UIs use. Only matters on weaker CPUs; desktop/WebGPU devices render
-   *  fast enough either way. */
-  streaming?: boolean;
-}) {
+// True while the enclosing message is still being generated. Read via
+// useContext (not a prop threaded through the `components` map) so the
+// `pre` renderer's own function identity never has to change when this
+// flips -- react-markdown uses each components[name] function as the actual
+// JSX element type, so a new `pre` reference would make React tear down and
+// remount every code block right as generation finishes, discarding
+// CodeBlock's own state (a just-run Python result, "Copied", etc). Context
+// updates re-render CodeBlock with the new value without doing that.
+const StreamingContext = createContext(false);
+
+function CodeBlock({ language: rawLanguage, code }: { language: string; code: string }) {
+  const streaming = useContext(StreamingContext);
   const [copied, setCopied] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ output: string; ok: boolean } | null>(null);
@@ -195,46 +190,49 @@ function CodeBlock({
   );
 }
 
-function buildComponents(streaming: boolean): Components {
-  return {
-    code({ className, children, ...rest }) {
-      return (
-        <code
-          className={className ?? "rounded bg-surface px-1.5 py-0.5 text-[0.85em]"}
-          {...rest}
-        >
-          {children}
-        </code>
-      );
-    },
-    pre({ children }) {
-      const codeEl = children as React.ReactElement<{
-        className?: string;
-        children?: React.ReactNode;
-      }> | null;
-      const className = codeEl?.props?.className ?? "";
-      const match = /language-(\w+)/.exec(className);
-      const codeText = String(codeEl?.props?.children ?? "").replace(/\n$/, "");
-      return <CodeBlock language={match?.[1] ?? ""} code={codeText} streaming={streaming} />;
-    },
-    p({ children }) {
-      return <p className="mb-2 last:mb-0">{children}</p>;
-    },
-    ul({ children }) {
-      return <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>;
-    },
-    ol({ children }) {
-      return <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>;
-    },
-    a({ children, href }) {
-      return (
-        <a href={href} target="_blank" rel="noreferrer" className="text-accent underline">
-          {children}
-        </a>
-      );
-    },
-  };
-}
+// Takes a ref (rather than a plain boolean) and built exactly once per
+// MarkdownMessage instance (see the empty-deps useMemo below): react-markdown
+// A single stable module-level object rather than something built fresh per
+// render/instance: react-markdown uses each components[name] function as the
+// actual JSX element type, so a new `pre` reference would make React tear
+// down and remount every code block, discarding CodeBlock's own state (a
+// just-run Python result, "Copied", etc). CodeBlock reads `streaming` from
+// StreamingContext above instead of a prop, so `pre` never needs to change.
+const components: Components = {
+  code({ className, children, ...rest }) {
+    return (
+      <code className={className ?? "rounded bg-surface px-1.5 py-0.5 text-[0.85em]"} {...rest}>
+        {children}
+      </code>
+    );
+  },
+  pre({ children }) {
+    const codeEl = children as React.ReactElement<{
+      className?: string;
+      children?: React.ReactNode;
+    }> | null;
+    const className = codeEl?.props?.className ?? "";
+    const match = /language-(\w+)/.exec(className);
+    const codeText = String(codeEl?.props?.children ?? "").replace(/\n$/, "");
+    return <CodeBlock language={match?.[1] ?? ""} code={codeText} />;
+  },
+  p({ children }) {
+    return <p className="mb-2 last:mb-0">{children}</p>;
+  },
+  ul({ children }) {
+    return <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>;
+  },
+  ol({ children }) {
+    return <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>;
+  },
+  a({ children, href }) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className="text-accent underline">
+        {children}
+      </a>
+    );
+  },
+};
 
 function MarkdownFallback(_props: object, { error }: ErrorInfo) {
   return (
@@ -255,20 +253,21 @@ export default function MarkdownMessage({
    *  `streaming` prop doc for why this matters. */
   streaming?: boolean;
 }) {
-  const components = useMemo(() => buildComponents(!!streaming), [streaming]);
   return (
-    <MarkdownErrorBoundary>
-      {/* eslint-disable-next-line @next/next/no-css-tags */}
-      <link rel="stylesheet" href="/katex/katex.min.css" precedence="default" />
-      <div className="max-w-none text-[15px] leading-relaxed [&>*:last-child]:mb-0">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkMath]}
-          rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
-          components={components}
-        >
-          {normalizeMathDelimiters(content)}
-        </ReactMarkdown>
-      </div>
-    </MarkdownErrorBoundary>
+    <StreamingContext.Provider value={!!streaming}>
+      <MarkdownErrorBoundary>
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" href="/katex/katex.min.css" precedence="default" />
+        <div className="max-w-none text-[15px] leading-relaxed [&>*:last-child]:mb-0">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
+            components={components}
+          >
+            {normalizeMathDelimiters(content)}
+          </ReactMarkdown>
+        </div>
+      </MarkdownErrorBoundary>
+    </StreamingContext.Provider>
   );
 }
