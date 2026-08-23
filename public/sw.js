@@ -1,4 +1,4 @@
-const CACHE_NAME = "offline-companion-shell-v1";
+const CACHE_NAME = "offline-companion-shell-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -11,7 +11,17 @@ self.addEventListener("install", (event) => {
       } catch {}
     })()
   );
-  self.skipWaiting();
+  // No self.skipWaiting() here: activating a new worker immediately would
+  // take over an already-open tab mid-session, leaving its already-loaded
+  // JS running against newly-served (mismatched) asset chunks. Instead this
+  // worker sits in "waiting" until the page explicitly asks it to take over
+  // (see the SKIP_WAITING message handler below and RegisterServiceWorker.tsx),
+  // which only happens once the user accepts the "update available" prompt
+  // and the page is about to reload anyway.
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
