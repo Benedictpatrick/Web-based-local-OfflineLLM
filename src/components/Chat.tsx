@@ -1320,7 +1320,7 @@ export default function Chat({
               <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
               <div className="min-w-0 flex-1 pt-1">
                 {draftReply ? (
-                  <MarkdownMessage content={draftReply} />
+                  <MarkdownMessage content={draftReply} streaming />
                 ) : (
                   <span className="inline-flex gap-1">
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.3s]" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { unstable_catchError, type ErrorInfo } from "next/error";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -82,7 +82,23 @@ export function normalizeMathDelimiters(markdown: string): string {
 
 const RUNNABLE_LANGUAGES = new Set(["python", "py"]);
 
-function CodeBlock({ language: rawLanguage, code }: { language: string; code: string }) {
+function CodeBlock({
+  language: rawLanguage,
+  code,
+  streaming,
+}: {
+  language: string;
+  code: string;
+  /** True while this message is still being generated. Skips the
+   *  SyntaxHighlighter (Prism) pass -- by far the most expensive part of
+   *  rendering a code block -- while the block is still growing character
+   *  by character, since that same expensive pass would otherwise re-run
+   *  on every streamed update. The block pops into full color once
+   *  generation finishes and this flips to false, same pattern most chat
+   *  UIs use. Only matters on weaker CPUs; desktop/WebGPU devices render
+   *  fast enough either way. */
+  streaming?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ output: string; ok: boolean } | null>(null);
@@ -132,18 +148,24 @@ function CodeBlock({ language: rawLanguage, code }: { language: string; code: st
         </div>
       </div>
       <div className="overflow-x-auto">
-        <SyntaxHighlighter
-          language={language || "text"}
-          style={oneDark}
-          customStyle={{
-            margin: 0,
-            padding: "12px 14px",
-            background: "transparent",
-            fontSize: "inherit",
-          }}
-        >
-          {code}
-        </SyntaxHighlighter>
+        {streaming ? (
+          <pre className="m-0 whitespace-pre px-3.5 py-3 font-mono">
+            <code>{code}</code>
+          </pre>
+        ) : (
+          <SyntaxHighlighter
+            language={language || "text"}
+            style={oneDark}
+            customStyle={{
+              margin: 0,
+              padding: "12px 14px",
+              background: "transparent",
+              fontSize: "inherit",
+            }}
+          >
+            {code}
+          </SyntaxHighlighter>
+        )}
       </div>
       {needsInput && (
         <div className="border-t border-border px-3 py-2">
@@ -173,44 +195,46 @@ function CodeBlock({ language: rawLanguage, code }: { language: string; code: st
   );
 }
 
-const components: Components = {
-  code({ className, children, ...rest }) {
-    return (
-      <code
-        className={className ?? "rounded bg-surface px-1.5 py-0.5 text-[0.85em]"}
-        {...rest}
-      >
-        {children}
-      </code>
-    );
-  },
-  pre({ children }) {
-    const codeEl = children as React.ReactElement<{
-      className?: string;
-      children?: React.ReactNode;
-    }> | null;
-    const className = codeEl?.props?.className ?? "";
-    const match = /language-(\w+)/.exec(className);
-    const codeText = String(codeEl?.props?.children ?? "").replace(/\n$/, "");
-    return <CodeBlock language={match?.[1] ?? ""} code={codeText} />;
-  },
-  p({ children }) {
-    return <p className="mb-2 last:mb-0">{children}</p>;
-  },
-  ul({ children }) {
-    return <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>;
-  },
-  ol({ children }) {
-    return <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>;
-  },
-  a({ children, href }) {
-    return (
-      <a href={href} target="_blank" rel="noreferrer" className="text-accent underline">
-        {children}
-      </a>
-    );
-  },
-};
+function buildComponents(streaming: boolean): Components {
+  return {
+    code({ className, children, ...rest }) {
+      return (
+        <code
+          className={className ?? "rounded bg-surface px-1.5 py-0.5 text-[0.85em]"}
+          {...rest}
+        >
+          {children}
+        </code>
+      );
+    },
+    pre({ children }) {
+      const codeEl = children as React.ReactElement<{
+        className?: string;
+        children?: React.ReactNode;
+      }> | null;
+      const className = codeEl?.props?.className ?? "";
+      const match = /language-(\w+)/.exec(className);
+      const codeText = String(codeEl?.props?.children ?? "").replace(/\n$/, "");
+      return <CodeBlock language={match?.[1] ?? ""} code={codeText} streaming={streaming} />;
+    },
+    p({ children }) {
+      return <p className="mb-2 last:mb-0">{children}</p>;
+    },
+    ul({ children }) {
+      return <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>;
+    },
+    ol({ children }) {
+      return <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>;
+    },
+    a({ children, href }) {
+      return (
+        <a href={href} target="_blank" rel="noreferrer" className="text-accent underline">
+          {children}
+        </a>
+      );
+    },
+  };
+}
 
 function MarkdownFallback(_props: object, { error }: ErrorInfo) {
   return (
@@ -222,7 +246,16 @@ function MarkdownFallback(_props: object, { error }: ErrorInfo) {
 
 const MarkdownErrorBoundary = unstable_catchError(MarkdownFallback);
 
-export default function MarkdownMessage({ content }: { content: string }) {
+export default function MarkdownMessage({
+  content,
+  streaming,
+}: {
+  content: string;
+  /** True while this message is still being generated -- see CodeBlock's
+   *  `streaming` prop doc for why this matters. */
+  streaming?: boolean;
+}) {
+  const components = useMemo(() => buildComponents(!!streaming), [streaming]);
   return (
     <MarkdownErrorBoundary>
       {/* eslint-disable-next-line @next/next/no-css-tags */}
