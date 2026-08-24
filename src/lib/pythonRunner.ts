@@ -1,4 +1,5 @@
 import type { PyodideAPI, loadPyodide as LoadPyodideFn } from "pyodide";
+import { serialize } from "./serialize";
 
 declare global {
   interface Window {
@@ -41,12 +42,10 @@ export interface PythonRunResult {
 // Pyodide is a single shared instance, so concurrent runs (e.g. clicking
 // "Run" on two code blocks close together) must not interleave their
 // stdout/stderr/stdin. Chain each call onto the previous one's completion.
-let runQueue: Promise<unknown> = Promise.resolve();
+const runPythonSerialized = serialize(runPythonExclusive);
 
 export function runPython(code: string, stdin = ""): Promise<PythonRunResult> {
-  const run = runQueue.then(() => runPythonExclusive(code, stdin));
-  runQueue = run.catch(() => {});
-  return run;
+  return runPythonSerialized(code, stdin);
 }
 
 async function runPythonExclusive(code: string, stdin: string): Promise<PythonRunResult> {

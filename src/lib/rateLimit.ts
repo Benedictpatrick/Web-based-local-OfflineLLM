@@ -24,10 +24,13 @@ export function isRateLimited(key: string, limit: number, windowMs = WINDOW_MS):
       const oldestKey = buckets.keys().next().value;
       if (oldestKey !== undefined) buckets.delete(oldestKey);
     }
+    buckets.delete(key);
     buckets.set(key, { count: 1, resetAt: now + windowMs });
     return false;
   }
   bucket.count++;
+  buckets.delete(key);
+  buckets.set(key, bucket);
   return bucket.count > limit;
 }
 

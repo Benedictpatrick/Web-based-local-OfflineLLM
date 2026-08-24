@@ -11,7 +11,7 @@ import type { NextConfig } from "next";
 // there's no fixed hash to allowlist for those. Enforcing this CSP as-is
 // blocks them and breaks hydration entirely (confirmed live). Actually
 // enforcing script-src requires wiring up Next's CSP nonce support
-// (a per-request nonce via middleware, passed through so Next tags its own
+// (a per-request nonce via proxy.ts's `proxy()`, passed through so Next tags its own
 // inline scripts with it -- see https://nextjs.org/docs/app/guides/content-security-policy)
 // instead of a static hash list. Until that's done, this stays Report-Only.
 const THEME_INIT_SCRIPT_HASH = "sha256-Az90PsUCPeHIwS42stfIJ/iIvqRU2+utTzKqsDDk4mM=";

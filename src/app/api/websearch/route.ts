@@ -47,7 +47,7 @@ function extractRealUrl(ddgHref: string): string | null {
  * instant-answer boxes, not general web results, so it's not a substitute.
  */
 export async function GET(request: NextRequest) {
-  if (isRateLimited(clientIp(request), RATE_LIMIT_PER_MINUTE)) {
+  if (isRateLimited(`websearch:${clientIp(request)}`, RATE_LIMIT_PER_MINUTE)) {
     return Response.json({ error: "Too many requests" }, { status: 429 });
   }
 

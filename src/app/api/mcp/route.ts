@@ -55,7 +55,7 @@ function extractTextContent(result: unknown): string {
  * fresh per request rather than holding a session open.
  */
 export async function POST(request: NextRequest) {
-  if (isRateLimited(clientIp(request), RATE_LIMIT_PER_MINUTE)) {
+  if (isRateLimited(`mcp:${clientIp(request)}`, RATE_LIMIT_PER_MINUTE)) {
     return Response.json({ error: "Too many requests" }, { status: 429 });
   }
 

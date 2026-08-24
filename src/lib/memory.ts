@@ -1,5 +1,6 @@
 import { db, type Memory } from "./db";
 import { cosineSimilarity, embed } from "./embeddings";
+import { serialize } from "./serialize";
 
 /** Cap on stored memories; the oldest is dropped when a new one would exceed it. */
 export const MAX_MEMORIES = 100;
@@ -140,18 +141,15 @@ export function setUserName(name: string | null): void {
 // Reads all memories into `existing` once, then mutates that snapshot and
 // IndexedDB together across an await loop below -- two overlapping calls
 // would each work off a stale snapshot and could double-write past
-// MAX_MEMORIES or miss a duplicate the other just added. Chaining onto the
-// previous call's completion keeps saves serialized, same fix as
-// pythonRunner.ts's runQueue.
-let saveQueue: Promise<unknown> = Promise.resolve();
+// MAX_MEMORIES or miss a duplicate the other just added. Serializing keeps
+// saves in order, same fix as pythonRunner.ts's runPython.
+const saveExtractedMemoriesSerialized = serialize(saveExtractedMemoriesExclusive);
 
 export function saveExtractedMemories(
   userText: string,
   priorAssistantText: string | null = null
 ): Promise<void> {
-  const run = saveQueue.then(() => saveExtractedMemoriesExclusive(userText, priorAssistantText));
-  saveQueue = run.catch(() => {});
-  return run;
+  return saveExtractedMemoriesSerialized(userText, priorAssistantText);
 }
 
 async function saveExtractedMemoriesExclusive(
