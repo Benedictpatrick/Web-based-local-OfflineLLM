@@ -599,10 +599,28 @@ export default function Chat({
           (agentMode ? AGENT_INSTRUCTIONS : "") +
           (isOnline ? buildMcpInstructions(enabledToolMap) : "")) +
       (identityOverride ? ` ${identityOverride}` : "");
+    // contextBlock is folded into the *last* (current-turn) message instead of
+    // the system prompt. web-llm's WebGPU engine only reuses its KV cache
+    // across turns when the new request's messages match the previous one
+    // except for that last message (see compareConversationObject in
+    // @mlc-ai/web-llm) -- keeping the system prompt stable across turns lets
+    // that multi-round reuse actually kick in instead of a full reprefill of
+    // the whole history on every message, with no change to what the model
+    // sees overall.
+    const historyForModel =
+      contextBlock && history.length > 0
+        ? [
+            ...history.slice(0, -1),
+            {
+              ...history[history.length - 1],
+              content: contextBlock + history[history.length - 1].content,
+            },
+          ]
+        : history;
     await streamReply(
       [
-        { role: "system", content: systemPrompt + (contextBlock ? `\n\n${contextBlock}` : "") },
-        ...history,
+        { role: "system", content: systemPrompt },
+        ...historyForModel,
       ],
       activeConversationId,
       {
