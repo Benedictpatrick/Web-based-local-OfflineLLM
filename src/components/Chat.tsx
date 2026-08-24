@@ -15,6 +15,7 @@ import {
   getDeviceInfo,
   getEngineKind,
   getLastGenerationStats,
+  getLastUsedModelId,
   getLoadedContextSize,
   hasWebGpu,
   isModelCached,
@@ -23,6 +24,7 @@ import {
   isWasmSupported,
   loadEngine,
   modelDisplayParts,
+  setLastUsedModelId,
 } from "@/lib/llm";
 import { generateOnce } from "@/lib/generation";
 import { runResearch } from "@/lib/research";
@@ -42,6 +44,13 @@ import { callMcpTool, extractSoleToolCall } from "@/lib/mcp";
 import { transcribeAudio, type SpeechModelProgress } from "@/lib/speechRecognition";
 import { shareOrDownloadBenchmarkCard } from "@/lib/shareCard";
 import { haptic } from "@/lib/haptics";
+import {
+  clearInflightReply,
+  readDraftInput,
+  readInflightReply,
+  writeDraftInput,
+  writeInflightReply,
+} from "@/lib/refreshRecovery";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import ModelPicker from "@/components/ModelPicker";
 import ComposerActionsMenu from "@/components/ComposerActionsMenu";
@@ -290,7 +299,7 @@ export default function Chat({
   const [showStatusDetail, setShowStatusDetail] = useState(false);
   const [errorText, setErrorText] = useState<string>("");
   const [changingModel, setChangingModel] = useState(false);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(() => readDraftInput());
   const [streaming, setStreaming] = useState(false);
   const [draftReply, setDraftReply] = useState("");
   const [wasmSupported] = useState(() => isWasmSupported());
@@ -363,6 +372,51 @@ export default function Chat({
     return map;
   }, [mcpServers]);
 
+  // Keeps whatever the user has typed but not sent yet surviving an
+  // accidental refresh/close -- see readDraftInput's lazy initializer above.
+  useEffect(() => {
+    writeDraftInput(input);
+  }, [input]);
+
+  // Recovers a reply that was still streaming when the page was refreshed or
+  // closed (normal completion/stop already clears this in streamReply's
+  // finally block, so anything still here on mount means the tab went away
+  // mid-stream). Runs once per full page load, and targets whichever
+  // conversation the interrupted reply belonged to -- not necessarily the one
+  // currently open -- since db.chat.add doesn't require it to be visible now.
+  useEffect(() => {
+    const pending = readInflightReply();
+    if (!pending) return;
+    clearInflightReply();
+    if (!pending.text.trim()) return;
+    (async () => {
+      await db.chat.add({
+        conversationId: pending.conversationId,
+        role: "assistant",
+        content: `${pending.text}\n\n*(Cut off — the page was refreshed while this reply was still generating.)*`,
+        createdAt: pending.updatedAt,
+      });
+      await db.conversations.update(pending.conversationId, { updatedAt: Date.now() });
+    })();
+  }, []);
+
+  // Warns before a refresh/close/tab-close while a reply is actively
+  // streaming -- that's the one moment losing the tab costs the most (the
+  // model has to fully reload after). The recovery above means an
+  // accidental refresh anyway isn't a total loss, but this warning still
+  // gives a chance to avoid it in the first place. Browsers ignore any
+  // custom message and show their own fixed wording, so returnValue's
+  // content doesn't matter -- only that it's set.
+  useEffect(() => {
+    if (!streaming) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [streaming]);
+
   // A pending tool-call confirmation can never be left to hang: if the user
   // stops generation or navigates away while it's showing, resolve it to
   // "declined" so streamReply's awaited promise always settles.
@@ -393,6 +447,19 @@ export default function Chat({
     if (autoLoadStartedRef.current || !wasmSupported) return;
     autoLoadStartedRef.current = true;
     (async () => {
+      // A refresh/close always throws away the in-memory engine, so this app
+      // reload has no choice but to redo model init. But if the model that
+      // was working before this reload is still sitting in the browser's own
+      // cache, there's no reason to make the user click "Load" again for it
+      // -- jump straight into loading it, same as it would've resumed had the
+      // engine survived. Only skip the picker when it's actually cached, so
+      // a wiped cache (or first-ever visit) still asks before using bandwidth.
+      const lastUsed = getLastUsedModelId();
+      if (lastUsed && (await isModelCached(lastUsed))) {
+        setModelId(lastUsed);
+        handleLoadModel(lastUsed);
+        return;
+      }
       const id = await getDefaultModelId();
       setModelId(id);
       setChangingModel(true);
@@ -502,6 +569,7 @@ export default function Chat({
             : `Downloaded and loaded in ${seconds}s`
         );
         setHasLoadedOnce(true);
+        setLastUsedModelId(idToLoad);
         setStatus("ready");
         setShowStatusDetail(true);
         statusDetailTimeoutRef.current = setTimeout(() => setShowStatusDetail(false), 6000);
@@ -654,6 +722,11 @@ export default function Chat({
     setDraftReply("");
     setResearchStatus([]);
 
+    const persistDraft = (text: string) => {
+      setDraftReply(text);
+      writeInflightReply({ conversationId: activeConversationId, text, updatedAt: Date.now() });
+    };
+
     // Broadened retrieval (higher k, lower threshold than normal chat's top-3/0.3)
     // so research genuinely searches across saved context instead of just the
     // handful of closest matches -- see the threshold param added to
@@ -714,7 +787,7 @@ export default function Chat({
             return next;
           });
         },
-        onDelta: (text) => setDraftReply(text),
+        onDelta: (text) => persistDraft(text),
       });
 
       const full =
@@ -728,6 +801,7 @@ export default function Chat({
       await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
     } finally {
       setDraftReply("");
+      clearInflightReply();
       setResearchStatus([]);
       setStreaming(false);
       setLastStats(getLastGenerationStats());
@@ -743,6 +817,11 @@ export default function Chat({
     setDraftReply("");
     setAgentStatus(null);
 
+    const persistDraft = (text: string) => {
+      setDraftReply(text);
+      writeInflightReply({ conversationId: activeConversationId, text, updatedAt: Date.now() });
+    };
+
     const transcriptParts: string[] = [];
     let messages = promptMessages;
     let aborted = false;
@@ -754,7 +833,7 @@ export default function Chat({
         const result = await generateOnce(messages, {
           temperature: opts?.temperature,
           maxTokens: defaultReplyMaxTokens(),
-          onDelta: (text) => setDraftReply(prefix + text),
+          onDelta: (text) => persistDraft(prefix + text),
           onEngineLost: () => handleLoadModel(modelId),
         });
         const full = result.text;
@@ -776,7 +855,7 @@ export default function Chat({
 
         if (code) {
           transcriptParts.push(full);
-          setDraftReply(transcriptParts.join(""));
+          persistDraft(transcriptParts.join(""));
           setAgentStatus("Running code…");
           let outputText: string;
           try {
@@ -788,7 +867,7 @@ export default function Chat({
           }
           setAgentStatus(null);
           transcriptParts.push(`\n\n**Output:**\n\`\`\`\n${outputText}\n\`\`\`\n\n`);
-          setDraftReply(transcriptParts.join(""));
+          persistDraft(transcriptParts.join(""));
 
           messages = [
             ...messages,
@@ -829,7 +908,7 @@ export default function Chat({
         }
 
         transcriptParts.push(`Called \`${toolCall!.tool}\`…`);
-        setDraftReply(transcriptParts.join(""));
+        persistDraft(transcriptParts.join(""));
         setAgentStatus(`Calling ${resolved.serverName}…`);
         const { text: toolOutput, isError } = await callMcpTool(
           resolved.serverUrl,
@@ -861,6 +940,7 @@ export default function Chat({
       await db.conversations.update(activeConversationId, { updatedAt: Date.now() });
     } finally {
       setDraftReply("");
+      clearInflightReply();
       setAgentStatus(null);
       setStreaming(false);
       setLastStats(getLastGenerationStats());

@@ -3,13 +3,29 @@ import {
   AVAILABLE_MODELS,
   LoadStalledError,
   STALL_TIMEOUT_MS,
+  getLastUsedModelId,
   isWebgpuOnly,
   recommendModel,
+  setLastUsedModelId,
   withStallWatchdog,
 } from "./llm";
 
+class MemoryStorage {
+  private store = new Map<string, string>();
+  getItem(key: string) {
+    return this.store.has(key) ? this.store.get(key)! : null;
+  }
+  setItem(key: string, value: string) {
+    this.store.set(key, value);
+  }
+  removeItem(key: string) {
+    this.store.delete(key);
+  }
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "performance"] });
+  (globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage();
 });
 
 afterEach(() => {
@@ -164,5 +180,21 @@ describe("recommendModel", () => {
         }
       }
     }
+  });
+});
+
+describe("last-used model persistence", () => {
+  it("round-trips a known model id", () => {
+    setLastUsedModelId("llama3.2-1b");
+    expect(getLastUsedModelId()).toBe("llama3.2-1b");
+  });
+
+  it("returns null when nothing was ever saved", () => {
+    expect(getLastUsedModelId()).toBeNull();
+  });
+
+  it("ignores a stored id that isn't in the catalog anymore", () => {
+    localStorage.setItem("navo-last-model", "some-removed-model");
+    expect(getLastUsedModelId()).toBeNull();
   });
 });

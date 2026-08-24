@@ -407,6 +407,29 @@ export async function getDefaultModelId(): Promise<ModelId> {
   return (await hasWebGpu()) ? "llama3.2-3b" : "llama3.2-1b";
 }
 
+const LAST_MODEL_KEY = "navo-last-model";
+
+/** The model that last finished loading successfully, so a refresh can jump
+ *  straight back into it instead of re-showing the picker -- see
+ *  getLastUsedModelId's caller in Chat.tsx, which only skips the picker when
+ *  this model is still actually cached (no silent re-download). */
+export function setLastUsedModelId(modelId: ModelId): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(LAST_MODEL_KEY, modelId);
+  } catch {}
+}
+
+export function getLastUsedModelId(): ModelId | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const stored = localStorage.getItem(LAST_MODEL_KEY);
+    return stored && AVAILABLE_MODELS.some((m) => m.id === stored) ? (stored as ModelId) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function hasWebGpu(): Promise<boolean> {
   if (webGpuAvailablePromise) return webGpuAvailablePromise;
   webGpuAvailablePromise = (async () => {
