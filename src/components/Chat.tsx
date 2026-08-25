@@ -449,19 +449,11 @@ export default function Chat({
     autoLoadStartedRef.current = true;
     (async () => {
       // A refresh/close always throws away the in-memory engine, so this app
-      // reload has no choice but to redo model init. But if the model that
-      // was working before this reload is still sitting in the browser's own
-      // cache, there's no reason to make the user click "Load" again for it
-      // -- jump straight into loading it, same as it would've resumed had the
-      // engine survived. Only skip the picker when it's actually cached, so
-      // a wiped cache (or first-ever visit) still asks before using bandwidth.
-      const lastUsed = getLastUsedModelId();
-      if (lastUsed && (await isModelCached(lastUsed))) {
-        setModelId(lastUsed);
-        handleLoadModel(lastUsed);
-        return;
-      }
-      const id = await getDefaultModelId();
+      // reload has no choice but to redo model init. Always show the picker
+      // rather than auto-loading -- the user picks a model with an explicit
+      // "Load" click every time, even if it's still sitting in the browser's
+      // own cache from last time.
+      const id = getLastUsedModelId() ?? (await getDefaultModelId());
       setModelId(id);
       setChangingModel(true);
     })();
