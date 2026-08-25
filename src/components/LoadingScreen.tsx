@@ -1,6 +1,6 @@
 "use client";
 
-import OrbitLoader from "./OrbitLoader";
+import Mascot from "./Mascot";
 
 export default function LoadingScreen({
   status,
@@ -23,7 +23,7 @@ export default function LoadingScreen({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 px-6 text-center">
-      <OrbitLoader />
+      <Mascot size={64} />
       <span className="sr-only">Navo is loading</span>
 
       {status === "error" ? (

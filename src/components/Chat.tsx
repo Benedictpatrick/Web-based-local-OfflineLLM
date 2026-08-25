@@ -55,6 +55,7 @@ import { useOnlineStatus } from "@/lib/useOnlineStatus";
 import ModelPicker from "@/components/ModelPicker";
 import ComposerActionsMenu from "@/components/ComposerActionsMenu";
 import LoadingScreen from "@/components/LoadingScreen";
+import Mascot from "@/components/Mascot";
 import InstallBanner from "@/components/InstallBanner";
 import ResearchScopeModal, { type ResearchScopeAnswers } from "@/components/ResearchScopeModal";
 import ResearchProgress, { type ResearchStep } from "@/components/ResearchProgress";
@@ -127,7 +128,7 @@ const MessageHistory = memo(function MessageHistory({
         ) : (
           <div key={m.id} className="msg-enter flex flex-col gap-0.5">
             <div className="flex gap-3">
-              <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
+              <Mascot size={20} active={false} className="mt-1 shrink-0" />
               <div className="min-w-0 flex-1 pt-1">
                 <MarkdownMessage content={m.content} />
               </div>
@@ -1129,6 +1130,7 @@ export default function Chat({
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
         {!hasLoadedOnce && (
           <>
+            <Mascot size={72} active={false} className="mb-1" />
             <h1 className="relative mb-1 inline-block h-10 w-auto">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/navo-wordmark.png" alt="Navo AI" className="h-10 w-auto" />
@@ -1383,6 +1385,7 @@ export default function Chat({
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 py-6">
           {(messages ?? []).length === 0 && !streaming && (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
+              <Mascot size={72} active={false} />
               <p className="text-sm text-foreground-muted">
                 {researchMode
                   ? userName
@@ -1422,17 +1425,9 @@ export default function Chat({
           />
           {streaming && (
             <div className="msg-enter flex gap-3">
-              <div className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
+              <Mascot size={20} active={!draftReply} className="mt-1 shrink-0" />
               <div className="min-w-0 flex-1 pt-1">
-                {draftReply ? (
-                  <MarkdownMessage content={draftReply} streaming />
-                ) : (
-                  <span className="inline-flex gap-1">
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.3s]" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted [animation-delay:-0.15s]" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground-muted" />
-                  </span>
-                )}
+                {draftReply && <MarkdownMessage content={draftReply} streaming />}
                 {agentStatus && (
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />

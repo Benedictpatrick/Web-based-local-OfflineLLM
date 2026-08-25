@@ -154,6 +154,45 @@ body {
   }
 }
 
+/* Mascot: a static rendered character image (public/mascot.png). Life is
+ * added purely with CSS -- idle is a slow gentle float/bob, like it's
+ * hovering; .mascot-active (e.g. while a reply streams) speeds that up and
+ * adds a brightness pulse on the glow parts, to read as "working" not idle. */
+@keyframes mascot-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8%); }
+}
+
+@keyframes mascot-glow-pulse {
+  0%, 100% { filter: brightness(0.88); }
+  50% { filter: brightness(1.02); }
+}
+
+.mascot {
+  position: relative;
+  display: inline-block;
+}
+
+.mascot-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  filter: brightness(0.88);
+  animation: mascot-float 3.2s ease-in-out infinite;
+}
+
+.mascot-active .mascot-img {
+  animation:
+    mascot-float 1.1s ease-in-out infinite,
+    mascot-glow-pulse 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-img {
+    animation: none;
+  }
+}
+
 /* Composer send/stop button while a reply is streaming: an expanding ring
  * that fades out, looping continuously -- signals "working" the same way
  * ChatGPT's stop button pulses, so the button doesn't just sit there static
