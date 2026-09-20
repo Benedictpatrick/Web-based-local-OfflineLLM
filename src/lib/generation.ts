@@ -17,6 +17,9 @@ const MAX_STUCK_RETRIES = 1;
  *  second bad attempt in a row is treated as a real (if unusual) reply
  *  rather than retried forever. */
 const MAX_GARBLED_RETRIES = 1;
+/** Minimum gap between streamed text updates handed to the UI. Still reads as
+ *  smooth typing, but avoids re-rendering the whole reply on every frame. */
+const FLUSH_INTERVAL_MS = 80;
 
 export interface GenerateOnceOptions {
   temperature?: number;
@@ -47,11 +50,22 @@ export async function generateOnce(
 ): Promise<{ text: string; aborted: boolean }> {
   let aborted = false;
   let full = "";
+  // The latest streamed text of the current attempt, and the last text handed
+  // to onDelta, so whatever the spaced out flushes below haven't delivered yet
+  // is still delivered once the generation finishes.
+  let latestStreamed = "";
+  let lastDelivered = "";
 
   for (let attempt = 0; ; attempt++) {
     full = "";
+    latestStreamed = "";
+    lastDelivered = "";
     let pendingText = "";
     let flushScheduled = false;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let flushFrame: number | null = null;
+    let lastFlushAt = 0;
+    let attemptEnded = false;
     let lastChunkAt = performance.now();
     let sawFirstChunk = false;
     let watchdogFired = false;
@@ -62,13 +76,42 @@ export async function generateOnce(
       }
     }, 2000);
 
+    const deliver = () => {
+      if (attemptEnded) return;
+      flushScheduled = false;
+      flushFrame = null;
+      lastFlushAt = performance.now();
+      lastDelivered = pendingText;
+      opts.onDelta?.(pendingText);
+    };
+
+    // Each delivery re-renders (and re-parses as markdown) the whole reply so
+    // far, so at most one per FLUSH_INTERVAL_MS, on an animation frame.
     const scheduleFlush = () => {
       if (flushScheduled) return;
       flushScheduled = true;
-      requestAnimationFrame(() => {
-        opts.onDelta?.(pendingText);
-        flushScheduled = false;
-      });
+      const wait = FLUSH_INTERVAL_MS - (performance.now() - lastFlushAt);
+      if (wait > 0) {
+        flushTimer = setTimeout(() => {
+          flushTimer = null;
+          flushFrame = requestAnimationFrame(deliver);
+        }, wait);
+      } else {
+        flushFrame = requestAnimationFrame(deliver);
+      }
+    };
+
+    // A flush still waiting when the attempt ends must not fire later and
+    // land after the caller has already moved on.
+    const cancelFlush = () => {
+      attemptEnded = true;
+      if (flushTimer !== null) clearTimeout(flushTimer);
+      if (flushFrame !== null && typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(flushFrame);
+      }
+      flushTimer = null;
+      flushFrame = null;
+      flushScheduled = false;
     };
 
     try {
@@ -80,6 +123,7 @@ export async function generateOnce(
         lastChunkAt = performance.now();
         full += chunk;
         pendingText = full;
+        latestStreamed = full;
         scheduleFlush();
       }
       clearInterval(watchdog);
@@ -131,8 +175,14 @@ export async function generateOnce(
         full = full || `Sorry, generation failed: ${detail}`;
       }
       break;
+    } finally {
+      cancelFlush();
     }
   }
+
+  // Deliver anything the spaced out flushes hadn't yet, as the final rAF flush
+  // used to.
+  if (latestStreamed && latestStreamed !== lastDelivered) opts.onDelta?.(latestStreamed);
 
   return { text: full, aborted };
 }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearInflightReply,
   readDraftInput,
@@ -68,3 +68,36 @@ describe("draft input", () => {
     expect(localStorage.getItem("navo-draft-input")).toBeNull();
   });
 });
+
+describe("inflight reply write spacing", () => {
+  beforeEach(() => {
+    clearInflightReply();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    clearInflightReply();
+  });
+
+  it("writes the first update straight away, then defers a burst to the latest one", () => {
+    writeInflightReply({ conversationId: 1, text: "a", updatedAt: 1 });
+    expect(readInflightReply()?.text).toBe("a");
+
+    writeInflightReply({ conversationId: 1, text: "ab", updatedAt: 2 });
+    writeInflightReply({ conversationId: 1, text: "abc", updatedAt: 3 });
+    expect(readInflightReply()?.text).toBe("a");
+
+    vi.advanceTimersByTime(1000);
+    expect(readInflightReply()?.text).toBe("abc");
+  });
+
+  it("never lets a deferred write land after the entry is cleared", () => {
+    writeInflightReply({ conversationId: 1, text: "a", updatedAt: 1 });
+    writeInflightReply({ conversationId: 1, text: "ab", updatedAt: 2 });
+    clearInflightReply();
+
+    vi.advanceTimersByTime(2000);
+    expect(readInflightReply()).toBeNull();
+  });
+});
+

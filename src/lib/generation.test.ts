@@ -67,3 +67,47 @@ describe("generateOnce garbled-output retry", () => {
     expect(text).toBe(CLEAN_TEXT);
   });
 });
+
+describe("generateOnce streaming updates", () => {
+  beforeEach(() => {
+    streamChatMock.mockReset();
+  });
+
+  it("hands the UI far fewer updates than chunks, ending on the full text", async () => {
+    const words = Array.from({ length: 200 }, (_, i) => `word${i} `);
+    streamChatMock.mockReturnValueOnce(
+      (async function* () {
+        for (const w of words) yield w;
+      })()
+    );
+    const seen: string[] = [];
+
+    const { generateOnce } = await import("./generation");
+    const { text } = await generateOnce([{ role: "user", content: "Hi" }], {
+      onDelta: (t) => seen.push(t),
+    });
+
+    expect(text).toBe(words.join(""));
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.length).toBeLessThan(words.length / 4);
+    expect(seen[seen.length - 1]).toBe(text);
+  });
+
+  it("does not deliver any update after it has returned", async () => {
+    streamChatMock.mockReturnValueOnce(chunksOf(CLEAN_TEXT));
+    let returned = false;
+    let lateCalls = 0;
+
+    const { generateOnce } = await import("./generation");
+    await generateOnce([{ role: "user", content: "Hi" }], {
+      onDelta: () => {
+        if (returned) lateCalls++;
+      },
+    });
+    returned = true;
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(lateCalls).toBe(0);
+  });
+});
+
