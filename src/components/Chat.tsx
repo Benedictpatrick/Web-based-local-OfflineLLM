@@ -621,7 +621,15 @@ export default function Chat({
       return;
     }
 
-    const relevant = await topRelevantEntries(userText, journalEntries ?? [], 3);
+    // The three lookups are independent, so run them together rather than one
+    // after another (they share a single embedding of the query).
+    const [relevant, relevantMemories, fileChunks] = await Promise.all([
+      topRelevantEntries(userText, journalEntries ?? [], 3),
+      isMemoryEnabled() ? topRelevantMemories(userText, 3) : Promise.resolve([] as string[]),
+      attachedFile
+        ? topRelevantChunks(userText, attachedFile.chunks, 3)
+        : Promise.resolve([] as string[]),
+    ]);
     const notesBlock =
       relevant.length > 0
         ? `Relevant notes the user saved earlier:\n${relevant
@@ -629,13 +637,8 @@ export default function Chat({
             .join("\n")}\n\n`
         : "";
 
-    const memoriesBlock = isMemoryEnabled()
-      ? buildMemoriesBlock(await topRelevantMemories(userText, 3))
-      : "";
+    const memoriesBlock = isMemoryEnabled() ? buildMemoriesBlock(relevantMemories) : "";
 
-    const fileChunks = attachedFile
-      ? await topRelevantChunks(userText, attachedFile.chunks, 3)
-      : [];
     const fileBlock =
       fileChunks.length > 0
         ? `Excerpts from the uploaded file "${attachedFile?.name}":\n${fileChunks
