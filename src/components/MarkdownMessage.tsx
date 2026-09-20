@@ -232,6 +232,18 @@ const components: Components = {
       </a>
     );
   },
+  // Small models often invent image links that never resolve, which shows up
+  // as a broken image icon, and loading a remote one would also contact a
+  // third party from an app that promises nothing leaves the device. Only
+  // same origin and data images are rendered; anything else falls back to its
+  // alt text.
+  img({ src, alt }) {
+    if (typeof src === "string" && (src.startsWith("data:image/") || /^\/(?!\/)/.test(src))) {
+      // eslint-disable-next-line @next/next/no-img-element
+      return <img src={src} alt={alt ?? ""} className="my-2 max-w-full rounded-lg" />;
+    }
+    return alt ? <span className="italic text-foreground-muted">{alt}</span> : null;
+  },
 };
 
 function MarkdownFallback(_props: object, { error }: ErrorInfo) {

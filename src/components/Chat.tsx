@@ -56,6 +56,7 @@ import ModelPicker from "@/components/ModelPicker";
 import ComposerActionsMenu from "@/components/ComposerActionsMenu";
 import LoadingScreen from "@/components/LoadingScreen";
 import Mascot from "@/components/Mascot";
+import ThinkingIndicator from "@/components/ThinkingIndicator";
 import InstallBanner from "@/components/InstallBanner";
 import ResearchScopeModal, { type ResearchScopeAnswers } from "@/components/ResearchScopeModal";
 import ResearchProgress, { type ResearchStep } from "@/components/ResearchProgress";
@@ -1420,6 +1421,10 @@ export default function Chat({
               <Mascot size={20} active={!draftReply} className="mt-1 shrink-0" />
               <div className="min-w-0 flex-1 pt-1">
                 {draftReply && <MarkdownMessage content={draftReply} streaming />}
+                {!draftReply &&
+                  !agentStatus &&
+                  !pendingToolCall &&
+                  researchStatus.length === 0 && <ThinkingIndicator />}
                 {agentStatus && (
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />

@@ -108,6 +108,43 @@ body {
   animation: shimmer-slide 1.2s ease-in-out infinite;
 }
 
+/* Thinking indicator shown while waiting for the first token: a breathing dot
+ * plus a text label with a light band sweeping across it. */
+@keyframes thinking-dot-pulse {
+  0%, 100% { transform: scale(0.7); opacity: 0.5; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+@keyframes thinking-text-sweep {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.thinking-dot {
+  animation: thinking-dot-pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-text {
+  color: var(--foreground-muted);
+  background-image: linear-gradient(90deg, var(--foreground-muted) 40%, var(--foreground) 50%, var(--foreground-muted) 60%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: thinking-text-sweep 2.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dot {
+    animation: none;
+  }
+  .thinking-text {
+    animation: none;
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
 /* Dots flowing along a figure-8, forming the crossing-and-oval loader. Driven
  * by transform (not offset-path) so it animates on the GPU compositor and stays
  * smooth while model loading keeps the main thread busy. */
